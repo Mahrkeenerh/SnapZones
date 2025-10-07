@@ -8,17 +8,10 @@ from typing import Optional, Dict, Tuple
 import threading
 import time
 
-# Handle both package and standalone imports
-try:
-    from .window_manager import WindowManager
-    from .zone import Zone, ZoneManager
-    from .overlay import OverlayManager
-    from .input_monitor import InputMonitor
-except ImportError:
-    from window_manager import WindowManager
-    from zone import Zone, ZoneManager
-    from overlay import OverlayManager
-    from input_monitor import InputMonitor
+from .window_manager import WindowManager
+from .zone import Zone, ZoneManager
+from .overlay import OverlayManager
+from .input_monitor import InputMonitor
 
 
 class WindowSnapper:
@@ -227,7 +220,7 @@ class WindowSnapper:
         4. Snap window on release
         """
         print("Starting snap workflow...")
-        print("Shift+drag a window to snap it to a zone")
+        print("Super+drag a window to snap it to a zone")
         print("Press Escape to cancel")
         print("Press Ctrl+C to exit")
 
@@ -261,35 +254,51 @@ class WindowSnapper:
         overlay.set_on_overlay_hidden(on_overlay_hidden)
 
         # Set up input monitor callbacks
-        def on_shift_drag_start(x: int, y: int):
-            """Called when Shift+drag starts"""
-            print(f"Shift+drag started at ({x}, {y})")
-            self._is_snapping = True
+        def on_modifier_drag_start(x: int, y: int, shift: bool, ctrl: bool, alt: bool, super_key: bool):
+            """Called when drag starts with modifiers"""
+            # Check if Super is pressed (our trigger modifier)
+            if not super_key:
+                return
 
-            # Get currently active window
-            active_window = self.window_manager.get_active_window()
-            if active_window:
-                self._active_window_id = active_window.window_id
-                self._original_geometry = (active_window.x, active_window.y, active_window.width, active_window.height)
+            print(f"Super+drag started at ({x}, {y})", flush=True)
 
-            # Show overlay
-            workspace = self.get_current_workspace()
-            zm = self.load_workspace_zones(workspace)
+            def show_overlay_on_main_thread():
+                """Execute GTK operations on main thread"""
+                self._is_snapping = True
 
-            if len(zm) > 0:
-                self.overlay_manager.show(list(zm))
-            else:
-                print("No zones configured")
+                # Get currently active window
+                active_window = self.window_manager.get_active_window()
+                if active_window:
+                    self._active_window_id = active_window.window_id
+                    self._original_geometry = (active_window.x, active_window.y, active_window.width, active_window.height)
 
-        def on_shift_drag_end(x: int, y: int):
-            """Called when Shift+drag ends"""
-            print(f"Shift+drag ended at ({x}, {y})")
+                # Show overlay
+                workspace = self.get_current_workspace()
+                zm = self.load_workspace_zones(workspace)
+
+                if len(zm) > 0:
+                    self.overlay_manager.show(list(zm))
+                    print(f"Overlay shown with {len(zm)} zones", flush=True)
+                else:
+                    print("No zones configured", flush=True)
+
+                return False  # Don't repeat
+
+            # Schedule GTK operations on main thread
+            GLib.idle_add(show_overlay_on_main_thread)
+
+        def on_modifier_drag_end(x: int, y: int, shift: bool, ctrl: bool, alt: bool, super_key: bool):
+            """Called when drag ends with modifiers"""
+            if not super_key:
+                return
+
+            print(f"Super+drag ended at ({x}, {y})")
 
             # Don't auto-hide overlay - let zone click handle it
             # or let Escape cancel it
 
-        self.input_monitor.set_on_shift_drag_start(on_shift_drag_start)
-        self.input_monitor.set_on_shift_drag_end(on_shift_drag_end)
+        self.input_monitor.set_on_modifier_drag_start(on_modifier_drag_start)
+        self.input_monitor.set_on_modifier_drag_end(on_modifier_drag_end)
 
         # Start monitoring in separate thread
         monitor_thread = threading.Thread(target=self.input_monitor.start, daemon=True)

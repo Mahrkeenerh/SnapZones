@@ -29,7 +29,7 @@ import cairo
 import json
 import os
 from typing import List, Optional, Tuple
-from .zone import Zone, ZoneManager
+from .zone import Zone, ZoneManager, create_preset_layout
 
 
 class ZoneEditorOverlay(Gtk.Window):
@@ -116,9 +116,10 @@ class ZoneEditorOverlay(Gtk.Window):
         default_file = os.path.expanduser("~/.config/snapzones/zones.json")
         if os.path.exists(default_file):
             try:
-                self.zones = self.zone_manager.load_zones(default_file)
-                self.current_file = default_file
-                self.status_message = f"Loaded {len(self.zones)} zones from zones.json"
+                if self.zone_manager.load_from_file(default_file):
+                    self.zones = list(self.zone_manager.zones)
+                    self.current_file = default_file
+                    self.status_message = f"Loaded {len(self.zones)} zones from zones.json"
             except Exception as e:
                 self.status_message = f"Failed to load default zones: {e}"
 
@@ -499,9 +500,26 @@ class ZoneEditorOverlay(Gtk.Window):
         }
         if keyname in presets:
             preset_name = presets[keyname]
-            self.zones = self.zone_manager.create_preset(preset_name)
+            # Get screen dimensions
+            screen = self.get_screen()
+            screen_width = screen.get_width()
+            screen_height = screen.get_height()
+            # Create preset layout with absolute coordinates
+            absolute_zones = create_preset_layout(preset_name, screen_width, screen_height)
+            # Convert to relative coordinates (0.0-1.0)
+            self.zones = []
+            for zone in absolute_zones:
+                rel_zone = Zone(
+                    x=zone.x / screen_width,
+                    y=zone.y / screen_height,
+                    width=zone.width / screen_width,
+                    height=zone.height / screen_height,
+                    name=zone.name,
+                    color=zone.color
+                )
+                self.zones.append(rel_zone)
             self.selected_zone = None
-            self.status_message = f"Applied preset: {preset_name}"
+            self.status_message = f"Applied preset: {preset_name} ({len(self.zones)} zones)"
             self.queue_draw()
             return True
 
@@ -613,7 +631,7 @@ class ZoneEditorOverlay(Gtk.Window):
 
         try:
             self.zone_manager.zones = self.zones
-            self.zone_manager.save_zones(self.current_file)
+            self.zone_manager.save_to_file(self.current_file)
             self.status_message = f"Saved {len(self.zones)} zones to {os.path.basename(self.current_file)}"
         except Exception as e:
             self.status_message = f"Failed to save: {e}"
@@ -632,9 +650,12 @@ class ZoneEditorOverlay(Gtk.Window):
             return
 
         try:
-            self.zones = self.zone_manager.load_zones(self.current_file)
-            self.selected_zone = None
-            self.status_message = f"Loaded {len(self.zones)} zones from {os.path.basename(self.current_file)}"
+            if self.zone_manager.load_from_file(self.current_file):
+                self.zones = list(self.zone_manager.zones)
+                self.selected_zone = None
+                self.status_message = f"Loaded {len(self.zones)} zones from {os.path.basename(self.current_file)}"
+            else:
+                self.status_message = f"Failed to load from {os.path.basename(self.current_file)}"
         except Exception as e:
             self.status_message = f"Failed to load: {e}"
 
@@ -654,9 +675,10 @@ def main():
     # Load file if specified
     if args.load and os.path.exists(args.load):
         try:
-            window.zones = window.zone_manager.load_zones(args.load)
-            window.current_file = args.load
-            window.status_message = f"Loaded {len(window.zones)} zones from {os.path.basename(args.load)}"
+            if window.zone_manager.load_from_file(args.load):
+                window.zones = list(window.zone_manager.zones)
+                window.current_file = args.load
+                window.status_message = f"Loaded {len(window.zones)} zones from {os.path.basename(args.load)}"
         except Exception as e:
             print(f"Failed to load file: {e}")
 

@@ -7,11 +7,7 @@ from gi.repository import Gtk, Gdk, GLib
 import cairo
 from typing import List, Optional, Tuple, Callable
 
-# Handle both package and standalone imports
-try:
-    from .zone import Zone
-except ImportError:
-    from zone import Zone
+from .zone import Zone
 
 
 class OverlayWindow(Gtk.Window):
@@ -44,8 +40,8 @@ class OverlayWindow(Gtk.Window):
         # Set window to be above everything
         self.set_keep_above(True)
 
-        # Make window accept input (not click-through by default)
-        self.set_accept_focus(False)
+        # Make window accept input and focus (needed for keyboard events)
+        self.set_accept_focus(True)
 
         # Enable transparency
         screen = self.get_screen()
@@ -94,12 +90,23 @@ class OverlayWindow(Gtk.Window):
         ctx.set_operator(cairo.Operator.OVER)
         ctx.paint()
 
+        # Get screen dimensions for coordinate conversion
+        allocation = self.get_allocation()
+        screen_width = allocation.width
+        screen_height = allocation.height
+
         # Draw all zones
         for zone in self.zones:
-            self._draw_zone(ctx, zone)
+            self._draw_zone(ctx, zone, screen_width, screen_height)
 
-    def _draw_zone(self, ctx: cairo.Context, zone: Zone):
+    def _draw_zone(self, ctx: cairo.Context, zone: Zone, screen_width: int, screen_height: int):
         """Draw a single zone with appropriate styling"""
+        # Convert relative coordinates (0.0-1.0) to absolute pixels
+        x = int(zone.x * screen_width)
+        y = int(zone.y * screen_height)
+        w = int(zone.width * screen_width)
+        h = int(zone.height * screen_height)
+
         # Parse hex color
         color = self._parse_color(zone.color)
 
@@ -116,7 +123,7 @@ class OverlayWindow(Gtk.Window):
 
         # Draw filled rectangle
         ctx.set_source_rgba(color[0], color[1], color[2], alpha)
-        ctx.rectangle(zone.x, zone.y, zone.width, zone.height)
+        ctx.rectangle(x, y, w, h)
         ctx.fill()
 
         # Draw border
@@ -130,14 +137,14 @@ class OverlayWindow(Gtk.Window):
             ctx.set_source_rgba(1, 1, 1, 0.5)
             ctx.set_line_width(2)
 
-        ctx.rectangle(zone.x, zone.y, zone.width, zone.height)
+        ctx.rectangle(x, y, w, h)
         ctx.stroke()
 
         # Draw zone name if present
         if zone.name:
-            self._draw_zone_label(ctx, zone, is_highlighted or is_selected)
+            self._draw_zone_label(ctx, x, y, w, h, zone.name, is_highlighted or is_selected)
 
-    def _draw_zone_label(self, ctx: cairo.Context, zone: Zone, is_active: bool):
+    def _draw_zone_label(self, ctx: cairo.Context, x: int, y: int, w: int, h: int, name: str, is_active: bool):
         """Draw zone name label"""
         # Set font
         ctx.select_font_face('Sans', cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
@@ -147,24 +154,25 @@ class OverlayWindow(Gtk.Window):
         ctx.set_font_size(font_size)
 
         # Get text dimensions
-        extents = ctx.text_extents(zone.name)
+        extents = ctx.text_extents(name)
         text_width = extents.width
         text_height = extents.height
 
         # Calculate center position
-        cx, cy = zone.center
+        cx = x + w // 2
+        cy = y + h // 2
         text_x = cx - text_width / 2
         text_y = cy + text_height / 2
 
         # Draw text shadow
         ctx.set_source_rgba(0, 0, 0, 0.8)
         ctx.move_to(text_x + 2, text_y + 2)
-        ctx.show_text(zone.name)
+        ctx.show_text(name)
 
         # Draw text
         ctx.set_source_rgba(1, 1, 1, 1 if is_active else 0.9)
         ctx.move_to(text_x, text_y)
-        ctx.show_text(zone.name)
+        ctx.show_text(name)
 
     def _parse_color(self, hex_color: str) -> Tuple[float, float, float]:
         """Parse hex color string to RGB tuple (0-1 range)"""
@@ -235,7 +243,8 @@ class OverlayWindow(Gtk.Window):
     def show_overlay(self):
         """Show the overlay"""
         self.show_all()
-        self.present()
+        # Grab focus so we can receive keyboard events (especially Escape)
+        self.grab_focus()
         self.queue_draw()
 
     def hide_overlay(self):
