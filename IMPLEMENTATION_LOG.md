@@ -202,9 +202,205 @@ python src/snap_zones/zone.py --load FILE --test-point X Y
 
 ---
 
-## Phase 2: Input Monitoring System
+## Phase 2: Input Monitoring System ✅ COMPLETE
 
-**Status:** 🔄 Not Started
+**Status:** ✅ Complete
+**Date Completed:** 2025-10-07
+
+### Block 2.1: Global Mouse Tracking ✅
+
+**Status:** Complete
+**File:** `src/snap_zones/input_monitor.py`
+
+**Implemented:**
+
+#### `MouseTracker` Class
+- Properties:
+  - `position` - Current mouse position (x, y)
+  - `is_left_pressed` - Left button state
+  - `is_right_pressed` - Right button state
+  - `is_middle_pressed` - Middle button state
+  - `is_dragging` - Drag operation state
+  - `drag_start_position` - Position where drag started
+
+- Callbacks:
+  - `set_on_position_change(callback)` - Mouse movement
+  - `set_on_drag_start(callback)` - Drag operation begins
+  - `set_on_drag_move(callback)` - During drag
+  - `set_on_drag_end(callback)` - Drag operation ends
+  - `set_on_button_press(callback)` - Button pressed
+  - `set_on_button_release(callback)` - Button released
+
+- Methods:
+  - `start()` - Start monitoring
+  - `stop()` - Stop monitoring
+  - `is_running()` - Check if active
+  - `wait()` - Block until stopped
+
+**Test Results:**
+```bash
+$ python src/snap_zones/input_monitor.py --monitor --duration 3
+# Successfully tracked mouse position in real-time
+
+$ python src/snap_zones/input_monitor.py --track-drag --duration 5
+# Detected drag operations with start/move/end events
+# Calculated drag distance and offset correctly
+```
+
+**Key Features:**
+- Uses `pynput.mouse` for global mouse monitoring
+- Tracks drag operations with start position and offset
+- Real-time position updates
+- Button state tracking for left/right/middle buttons
+- Non-blocking listener in separate thread
+
+---
+
+### Block 2.2: Modifier Key Detection ✅
+
+**Status:** Complete
+**File:** `src/snap_zones/input_monitor.py`
+
+**Implemented:**
+
+#### `KeyboardTracker` Class
+- Properties:
+  - `is_shift_pressed` - Shift key state
+  - `is_ctrl_pressed` - Ctrl key state
+  - `is_alt_pressed` - Alt key state
+  - `is_super_pressed` - Super/Windows key state
+  - `pressed_keys` - Set of all currently pressed keys
+
+- Callbacks:
+  - `set_on_key_press(callback)` - Any key pressed
+  - `set_on_key_release(callback)` - Any key released
+  - `set_on_modifier_change(callback)` - Modifier state changed
+
+- Methods:
+  - `start()` / `stop()` / `is_running()` / `wait()`
+
+#### `InputMonitor` Class
+Combined mouse + keyboard monitoring with modifier-aware drag detection:
+- `set_on_modifier_drag_start(callback)` - Drag with modifiers (x, y, shift, ctrl, alt, super)
+- `set_on_modifier_drag_move(callback)` - Drag movement with modifiers
+- `set_on_modifier_drag_end(callback)` - Drag end with modifiers
+- `start()` - Start both trackers
+- `stop()` - Stop both trackers
+
+**Test Results:**
+```bash
+$ python src/snap_zones/input_monitor.py --track-modifiers --duration 10
+# Successfully detected Shift, Ctrl, Alt, and Super key presses
+[MODIFIERS] CTRL
+[MODIFIERS] SHIFT
+[MODIFIERS] SUPER
+[MODIFIERS] ALT
+
+$ python src/snap_zones/input_monitor.py --track-shift-drag --duration 15
+# Successfully detected drag operations with and without modifiers
+[NO MODIFIERS+DRAG START] at (389, 1208)
+[-] (388, 1208) ...
+[NO MODIFIERS+DRAG END] at (130, 1335)
+
+[SHIFT+DRAG START] at (132, 1302)
+[S] (135, 1299) ...  # [S] indicates Shift held
+[SHIFT+DRAG END] at (425, 1203)
+
+[CTRL+DRAG START] ...
+[C] ...  # [C] indicates Ctrl held
+
+[ALT+DRAG START] ...
+[A] ...  # [A] indicates Alt held
+```
+
+**Key Features:**
+- Detects all standard modifier keys (Shift, Ctrl, Alt, Super)
+- Tracks modifier state during drag operations
+- Combined state machine for mouse+keyboard interaction
+- Real-time modifier change callbacks
+- Uses `pynput.keyboard` for global keyboard monitoring
+
+---
+
+### Block 2.3: Global Hotkey System ✅
+
+**Status:** Complete
+**File:** `src/snap_zones/input_monitor.py`
+
+**Implemented:**
+
+#### `Hotkey` Class
+Represents a keyboard hotkey combination:
+- `__init__(modifiers, key, callback, description)` - Create hotkey
+- `matches(shift, ctrl, alt, super, key)` - Check if state matches
+- Properties: `modifiers`, `key`, `callback`, `description`
+
+#### `HotkeyManager` Class
+Manages global hotkey registration and triggering:
+- `register(modifiers, key, callback, description)` - Register new hotkey
+- `unregister(hotkey)` - Remove hotkey
+- `clear_all()` - Remove all hotkeys
+- `get_hotkeys()` - List registered hotkeys
+- `set_on_hotkey_triggered(callback)` - Global hotkey callback
+- `enable()` / `disable()` - Toggle hotkey processing
+- `start()` / `stop()` / `is_running()` / `wait()`
+
+**Test Results:**
+```bash
+$ python src/snap_zones/input_monitor.py --test-hotkeys --duration 15
+Testing global hotkey system...
+Registered hotkeys:
+--------------------------------------------------------------------------------
+1. Hotkey[ALT+SUPER+Z] (Toggle zones overlay)
+2. Hotkey[CTRL+SHIFT+A] (Show all windows)
+3. Hotkey[ALT+F] (Focus mode)
+
+Press the registered hotkeys for 15 seconds...
+
+# When pressing Super+Alt+Z:
+*** HOTKEY 1 TRIGGERED: Super+Alt+Z ***
+[HOTKEY DETECTED] Hotkey[ALT+SUPER+Z] (Toggle zones overlay)
+```
+
+**Key Features:**
+- Register multiple hotkeys with arbitrary modifier combinations
+- Callback system for individual and global hotkey triggers
+- Enable/disable hotkey processing at runtime
+- Human-readable hotkey representation
+- Exact modifier matching (must match exactly, not just include)
+- First-match trigger policy for overlapping hotkeys
+
+---
+
+## Phase 2 Summary
+
+**Status:** ✅ COMPLETE
+**Date Completed:** 2025-10-07
+
+All three blocks successfully implemented and tested:
+
+1. **Mouse Tracking** - Real-time position, drag detection, button states
+2. **Modifier Detection** - Shift/Ctrl/Alt/Super tracking, combined with drag
+3. **Hotkey System** - Global hotkey registration and triggering
+
+**Command-Line Tools:**
+
+```bash
+# Mouse operations
+python src/snap_zones/input_monitor.py --monitor --duration 10
+python src/snap_zones/input_monitor.py --track-drag --duration 10
+python src/snap_zones/input_monitor.py --track-buttons --duration 10
+
+# Keyboard operations
+python src/snap_zones/input_monitor.py --track-modifiers --duration 10
+python src/snap_zones/input_monitor.py --track-shift-drag --duration 15
+python src/snap_zones/input_monitor.py --test-hotkeys --duration 15
+```
+
+**Next Phase:** Phase 3 - Overlay Rendering System
+- Block 3.1: Transparent Overlay Window
+- Block 3.2: Zone Visualization
+- Block 3.3: Zone Hit Detection
 
 ---
 
@@ -274,3 +470,4 @@ python src/snap_zones/zone.py --load FILE --test-point X Y
 ## Version History
 
 - **v0.1.0** (2025-10-07) - Phase 1 complete: Core Window Management
+- **v0.2.0** (2025-10-07) - Phase 2 complete: Input Monitoring System
