@@ -357,6 +357,11 @@ class InputMonitor:
         self._on_modifier_drag_move: Optional[Callable[[int, int, bool, bool, bool, bool], None]] = None
         self._on_modifier_drag_end: Optional[Callable[[int, int, bool, bool, bool, bool], None]] = None
 
+        # Convenience callbacks for specific modifier combinations
+        self._on_shift_drag_start: Optional[Callable[[int, int], None]] = None
+        self._on_shift_drag_move: Optional[Callable[[int, int], None]] = None
+        self._on_shift_drag_end: Optional[Callable[[int, int], None]] = None
+
     def set_on_modifier_drag_start(self, callback: Callable[[int, int, bool, bool, bool, bool], None]) -> None:
         """Set callback for drag start with modifiers (x, y, shift, ctrl, alt, super)"""
         self._on_modifier_drag_start = callback
@@ -369,37 +374,61 @@ class InputMonitor:
         """Set callback for drag end with modifiers (x, y, shift, ctrl, alt, super)"""
         self._on_modifier_drag_end = callback
 
+    def set_on_shift_drag_start(self, callback: Callable[[int, int], None]) -> None:
+        """Set callback for Shift+drag start (x, y)"""
+        self._on_shift_drag_start = callback
+
+    def set_on_shift_drag_move(self, callback: Callable[[int, int], None]) -> None:
+        """Set callback for Shift+drag move (x, y)"""
+        self._on_shift_drag_move = callback
+
+    def set_on_shift_drag_end(self, callback: Callable[[int, int], None]) -> None:
+        """Set callback for Shift+drag end (x, y)"""
+        self._on_shift_drag_end = callback
+
     def _setup_callbacks(self):
         """Setup internal callbacks to connect mouse and keyboard"""
         def on_drag_start(x, y):
+            shift = self.keyboard.is_shift_pressed
+            ctrl = self.keyboard.is_ctrl_pressed
+            alt = self.keyboard.is_alt_pressed
+            super_pressed = self.keyboard.is_super_pressed
+
+            # Call general modifier drag callback
             if self._on_modifier_drag_start:
-                self._on_modifier_drag_start(
-                    x, y,
-                    self.keyboard.is_shift_pressed,
-                    self.keyboard.is_ctrl_pressed,
-                    self.keyboard.is_alt_pressed,
-                    self.keyboard.is_super_pressed
-                )
+                self._on_modifier_drag_start(x, y, shift, ctrl, alt, super_pressed)
+
+            # Call Shift-specific callback if Shift is pressed
+            if shift and self._on_shift_drag_start:
+                self._on_shift_drag_start(x, y)
 
         def on_drag_move(x, y):
+            shift = self.keyboard.is_shift_pressed
+            ctrl = self.keyboard.is_ctrl_pressed
+            alt = self.keyboard.is_alt_pressed
+            super_pressed = self.keyboard.is_super_pressed
+
+            # Call general modifier drag callback
             if self._on_modifier_drag_move:
-                self._on_modifier_drag_move(
-                    x, y,
-                    self.keyboard.is_shift_pressed,
-                    self.keyboard.is_ctrl_pressed,
-                    self.keyboard.is_alt_pressed,
-                    self.keyboard.is_super_pressed
-                )
+                self._on_modifier_drag_move(x, y, shift, ctrl, alt, super_pressed)
+
+            # Call Shift-specific callback if Shift is pressed
+            if shift and self._on_shift_drag_move:
+                self._on_shift_drag_move(x, y)
 
         def on_drag_end(x, y):
+            shift = self.keyboard.is_shift_pressed
+            ctrl = self.keyboard.is_ctrl_pressed
+            alt = self.keyboard.is_alt_pressed
+            super_pressed = self.keyboard.is_super_pressed
+
+            # Call general modifier drag callback
             if self._on_modifier_drag_end:
-                self._on_modifier_drag_end(
-                    x, y,
-                    self.keyboard.is_shift_pressed,
-                    self.keyboard.is_ctrl_pressed,
-                    self.keyboard.is_alt_pressed,
-                    self.keyboard.is_super_pressed
-                )
+                self._on_modifier_drag_end(x, y, shift, ctrl, alt, super_pressed)
+
+            # Call Shift-specific callback if Shift is pressed
+            if shift and self._on_shift_drag_end:
+                self._on_shift_drag_end(x, y)
 
         self.mouse.set_on_drag_start(on_drag_start)
         self.mouse.set_on_drag_move(on_drag_move)

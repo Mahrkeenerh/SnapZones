@@ -84,9 +84,35 @@ python src/snap_zones/overlay.py --show --preset grid3x3
 
 ---
 
-## Phase 4: Core Snapping Logic ⏸️
+## Phase 4: Core Snapping Logic ✅
 
-**Status:** Pending
+**Date:** 2025-10-07 | **File:** `src/snap_zones/snapper.py`
+
+### Implemented
+- **WindowSnapper**: Core snapping orchestration with window management integration
+- **Workspace Support**: Load/save workspace-specific zone configurations
+- **Snap-to-Zone**: Move and resize active window to selected zone
+- **Shift+Drag Integration**: Complete workflow with InputMonitor and OverlayManager
+
+### CLI
+```bash
+# Snap active window to preset
+python src/snap_zones/snapper.py --snap-active quarters
+
+# Interactive Shift+drag workflow
+python src/snap_zones/snapper.py --interactive
+
+# List workspaces with zone counts
+python src/snap_zones/snapper.py --list-workspaces
+```
+
+### Key Features
+- WindowSnapper orchestrates all components (WindowManager, ZoneManager, OverlayManager, InputMonitor)
+- Workspace-aware zone loading: `zones_ws0.json`, `zones_ws1.json`, etc.
+- Fallback to default `zones.json` if workspace-specific zones not found
+- Original window geometry tracking for restore functionality
+- Shift+drag callbacks in InputMonitor trigger overlay display
+- Zone selection triggers snap-to-zone operation
 
 ---
 
@@ -113,3 +139,4 @@ python src/snap_zones/overlay.py --show --preset grid3x3
 - **v0.1.0** (2025-10-07) - Phase 1: Core Window Management
 - **v0.2.0** (2025-10-07) - Phase 2: Input Monitoring System
 - **v0.3.0** (2025-10-07) - Phase 3: Overlay Rendering System
+- **v0.4.0** (2025-10-07) - Phase 4: Core Snapping Logic
