@@ -52,6 +52,57 @@ class WindowManager:
         except Exception:
             return "<Unknown>"
 
+    def get_window_frame_extents(self, window) -> Tuple[int, int, int, int]:
+        """
+        Get frame extents (window decorations) for a window
+
+        Returns:
+            Tuple of (left, right, top, bottom) border sizes in pixels
+        """
+        try:
+            # First try _GTK_FRAME_EXTENTS for GTK apps with client-side decorations
+            # This property describes invisible borders/shadows around GTK windows
+            gtk_frame_extents = self.display.get_atom('_GTK_FRAME_EXTENTS')
+            gtk_extents_prop = window.get_full_property(gtk_frame_extents, X.AnyPropertyType)
+
+            if gtk_extents_prop and len(gtk_extents_prop.value) >= 4:
+                left, right, top, bottom = gtk_extents_prop.value[:4]
+                return (left, right, top, bottom)
+        except Exception:
+            pass
+
+        try:
+            # Try to get _NET_FRAME_EXTENTS property (standard window manager decorations)
+            net_frame_extents = self.display.get_atom('_NET_FRAME_EXTENTS')
+            extents_prop = window.get_full_property(net_frame_extents, X.AnyPropertyType)
+
+            if extents_prop and len(extents_prop.value) >= 4:
+                left, right, top, bottom = extents_prop.value[:4]
+                return (left, right, top, bottom)
+        except Exception:
+            pass
+
+        # Fallback: estimate from window geometry
+        try:
+            geom = window.get_geometry()
+
+            # If window has negative coordinates, it has borders
+            left_border = max(0, -geom.x) if geom.x < 0 else 0
+            top_border = max(0, -geom.y) if geom.y < 0 else 0
+
+            # If left border detected, assume uniform borders (common pattern)
+            if left_border > 0:
+                return (left_border, left_border, left_border, left_border)
+
+            # If only top border, it's likely a title bar
+            if top_border > 0:
+                return (0, 0, top_border, 0)
+
+        except Exception:
+            pass
+
+        return (0, 0, 0, 0)
+
     def get_window_geometry(self, window) -> Tuple[int, int, int, int]:
         """Get window geometry (x, y, width, height)"""
         try:
@@ -187,17 +238,37 @@ class WindowManager:
             # Remove maximized state if present
             self._unmaximize_window(window)
 
+            # Get frame extents (including invisible GTK borders/shadows)
+            left, right, top, bottom = self.get_window_frame_extents(window)
+
+            # Adjust position to compensate for invisible borders
+            # If window has invisible borders, we need to position it so the VISIBLE content
+            # starts at the target x,y (not the invisible border)
+            adjusted_x = x - left
+            adjusted_y = y - top
+            adjusted_width = width + left + right
+            adjusted_height = height + top + bottom
+
             # Use _NET_MOVERESIZE_WINDOW for better compatibility with window managers
             net_moveresize_window = self.display.get_atom('_NET_MOVERESIZE_WINDOW')
 
-            # Gravity (1 = NorthWest), flags indicate which values are set (all of them)
-            # Flags: 0x1=x, 0x2=y, 0x4=width, 0x8=height, 0x10=gravity
-            flags = (1 << 8) | (1 << 9) | (1 << 10) | (1 << 11) | (1 << 12)  # Source indication + x,y,w,h
+            # Gravity flags: StaticGravity (10) means coordinates are for the window including decorations
+            # Flags: source=1 (application), x, y, width, height set
+            gravity = 10  # StaticGravity
+            source = 1    # Application
+            flags = (source << 12) | (1 << 11) | (1 << 10) | (1 << 9) | (1 << 8) | gravity
+
+            # Convert signed values to unsigned 32-bit for X11 protocol
+            # Negative coordinates need to be represented as large unsigned values
+            def to_uint32(val):
+                if val < 0:
+                    return (1 << 32) + val
+                return val
 
             event = protocol.event.ClientMessage(
                 window=window,
                 client_type=net_moveresize_window,
-                data=(32, [flags, x, y, width, height])
+                data=(32, [flags, to_uint32(adjusted_x), to_uint32(adjusted_y), adjusted_width, adjusted_height])
             )
 
             mask = X.SubstructureRedirectMask | X.SubstructureNotifyMask
@@ -210,6 +281,27 @@ class WindowManager:
         except Exception as e:
             print(f"Error moving/resizing window: {e}", file=sys.stderr)
             return False
+
+    def _get_frame_extents(self, window) -> tuple[int, int, int, int]:
+        """
+        Get the frame extents (window decorations) for a window
+
+        Returns:
+            Tuple of (left, right, top, bottom) border widths in pixels
+        """
+        try:
+            net_frame_extents = self.display.get_atom('_NET_FRAME_EXTENTS')
+            extents_prop = window.get_full_property(net_frame_extents, X.AnyPropertyType)
+
+            if extents_prop and len(extents_prop.value) == 4:
+                # Returns [left, right, top, bottom]
+                return tuple(extents_prop.value)
+
+        except Exception:
+            pass
+
+        # Default to no frame if we can't get the property
+        return (0, 0, 0, 0)
 
     def _unmaximize_window(self, window):
         """Remove maximized state from a window"""
