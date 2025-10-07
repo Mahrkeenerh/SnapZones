@@ -115,31 +115,40 @@ class OverlayWindow(Gtk.Window):
         is_highlighted = zone == self.highlighted_zone
         is_selected = zone == self.selected_zone
 
+        # CaptiX-style alpha values (lower, more subtle)
         if is_selected:
-            alpha = 0.6
+            alpha = 0.4
         elif is_highlighted:
-            alpha = 0.5
-        else:
             alpha = 0.3
+        else:
+            alpha = 0.15
 
         # Draw filled rectangle
         ctx.set_source_rgba(color[0], color[1], color[2], alpha)
         ctx.rectangle(x, y, w, h)
         ctx.fill()
 
-        # Draw border
+        # Draw border with CaptiX-style dashed pattern
+        # CaptiX uses blue (0, 150, 255) with ~200 alpha -> (0, 0.588, 1.0, 0.784)
         if is_selected:
-            ctx.set_source_rgba(1, 1, 1, 0.9)
-            ctx.set_line_width(4)
-        elif is_highlighted:
-            ctx.set_source_rgba(1, 1, 1, 0.8)
+            ctx.set_source_rgba(0, 0.588, 1.0, 0.9)  # Brighter blue for selected
             ctx.set_line_width(3)
-        else:
-            ctx.set_source_rgba(1, 1, 1, 0.5)
+        elif is_highlighted:
+            ctx.set_source_rgba(0, 0.588, 1.0, 0.784)  # CaptiX blue
             ctx.set_line_width(2)
+        else:
+            ctx.set_source_rgba(0, 0.588, 1.0, 0.5)  # Dimmer blue for inactive
+            ctx.set_line_width(2)
+
+        # Set dashed line pattern (dash-dot style like CaptiX)
+        # Pattern: [dash_length, gap, dot, gap]
+        ctx.set_dash([10, 5, 2, 5])
 
         ctx.rectangle(x, y, w, h)
         ctx.stroke()
+
+        # Reset dash pattern for other drawing operations
+        ctx.set_dash([])
 
         # Draw zone name if present
         if zone.name:
