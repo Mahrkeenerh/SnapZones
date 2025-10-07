@@ -116,9 +116,65 @@ python src/snap_zones/snapper.py --list-workspaces
 
 ---
 
-## Phase 5: Zone Editor ⏸️
+## Phase 5: Zone Editor ✅
 
-**Status:** Pending
+**Date:** 2025-10-07 | **File:** `src/snap_zones/zone_editor.py`
+
+### Implemented
+- **ZoneEditorOverlay**: Fullscreen transparent overlay for zone editing
+- **In-Place Editing**: Draw and edit zones directly over desktop (WYSIWYG)
+- **Zone Manipulation**: Select, move, resize, and delete zones
+- **Visual Feedback**: Resize handles, selection highlighting, zone labels
+- **Preset Integration**: Apply built-in layout presets via keyboard shortcuts
+- **Keyboard Controls**: Complete keyboard-driven workflow
+
+### CLI
+```bash
+# Launch fullscreen zone editor overlay
+python -m src.snap_zones.zone_editor
+
+# Load existing layout
+python -m src.snap_zones.zone_editor --load ~/.config/snapzones/zones.json
+```
+
+### Key Features (Block 5.1: Basic Canvas Editor)
+- Fullscreen transparent GTK overlay (not a window)
+- Draw zones directly over actual desktop for precise positioning
+- Semi-transparent zone rendering with borders and labels
+- Real-time visual feedback during drawing
+- Auto-load existing zones from `~/.config/snapzones/zones.json`
+
+### Key Features (Block 5.2: Zone Manipulation)
+- Click to select zones (smallest zone priority for overlaps)
+- Drag selected zone to move (orange highlight when selected)
+- Resize via 8 handles (corners + edges): nw, ne, sw, se, n, s, e, w
+- Delete selected zone with Delete key
+- Canvas bounds enforcement and minimum zone size (3%)
+- Status bar at bottom shows current operation
+
+### Key Features (Block 5.3: Preset System)
+- Number key shortcuts for presets: 1=halves, 2=thirds, 3=quarters, 4=grid3x3
+- Integration with existing ZoneManager preset system
+- Status bar shows applied preset and zone count
+
+### Keyboard Controls
+- **ESC**: Exit editor
+- **H**: Toggle help panel
+- **S**: Save zones to `~/.config/snapzones/zones.json`
+- **L**: Load zones from file
+- **N**: New (clear all zones)
+- **Delete**: Delete selected zone
+- **1-4**: Apply preset layouts
+
+### Visual Design
+- Blue zones (unselected): semi-transparent for desktop visibility
+- Orange zones (selected): shows 8 white resize handles
+- Help panel: centered dark overlay with all controls listed
+- Status bar: bottom of screen with operation feedback
+
+### System Requirements
+- GTK3 development libraries: `libgirepository1.0-dev`, `libcairo2-dev`, `pkg-config`, `python3-dev`
+- Python packages: `PyGObject>=3.42,<3.50`, `pycairo>=1.20.0`
 
 ---
 
@@ -140,3 +196,4 @@ python src/snap_zones/snapper.py --list-workspaces
 - **v0.2.0** (2025-10-07) - Phase 2: Input Monitoring System
 - **v0.3.0** (2025-10-07) - Phase 3: Overlay Rendering System
 - **v0.4.0** (2025-10-07) - Phase 4: Core Snapping Logic
+- **v0.5.0** (2025-10-07) - Phase 5: Zone Editor
