@@ -58,9 +58,29 @@ python src/snap_zones/input_monitor.py --test-hotkeys --duration 15
 
 ---
 
-## Phase 3: Overlay Rendering System ⏸️
+## Phase 3: Overlay Rendering System ✅
 
-**Status:** Pending
+**Date:** 2025-10-07 | **File:** `src/snap_zones/overlay.py`
+
+### Implemented
+- **OverlayWindow**: Full-screen transparent GTK window with zone display
+- **Zone Visualization**: Semi-transparent colored zones with borders and labels
+- **Hit Detection**: Mouse hover highlighting, click selection
+- **OverlayManager**: Lifecycle management for overlay window
+
+### CLI
+```bash
+python src/snap_zones/overlay.py --show --preset quarters --duration 10
+python src/snap_zones/overlay.py --show --load FILE --duration 30
+python src/snap_zones/overlay.py --show --preset grid3x3
+```
+
+### Key Features
+- GTK3/Cairo for transparent overlay rendering
+- Real-time mouse hover highlighting
+- Click-to-select zone functionality
+- Escape key to cancel
+- Smallest-zone-first priority for overlapping zones
 
 ---
 
@@ -92,3 +112,4 @@ python src/snap_zones/input_monitor.py --test-hotkeys --duration 15
 
 - **v0.1.0** (2025-10-07) - Phase 1: Core Window Management
 - **v0.2.0** (2025-10-07) - Phase 2: Input Monitoring System
+- **v0.3.0** (2025-10-07) - Phase 3: Overlay Rendering System
