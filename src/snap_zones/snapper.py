@@ -251,18 +251,25 @@ class WindowSnapper:
         # Set up mouse button release callback
         def on_button_release(button_name: str):
             """Called when any mouse button is released"""
-            if button_name == 'left' and self._window_is_moving and self._overlay_visible:
-                print("Mouse button released - hiding overlay")
+            if button_name == 'left' and self._window_is_moving:
+                # Always clear window moving state on mouse release
+                self._window_is_moving = False
 
-                def hide_overlay_on_main_thread():
-                    self.overlay_manager.hide()
-                    self._overlay_visible = False
-                    self._is_snapping = False
-                    self._window_is_moving = False
+                # Only hide overlay if it's visible
+                if self._overlay_visible:
+                    print("Mouse button released - hiding overlay")
+
+                    def hide_overlay_on_main_thread():
+                        self.overlay_manager.hide()
+                        self._overlay_visible = False
+                        self._is_snapping = False
+                        self._active_window_id = None
+                        return False
+
+                    GLib.idle_add(hide_overlay_on_main_thread)
+                else:
+                    # Just clear the active window ID
                     self._active_window_id = None
-                    return False
-
-                GLib.idle_add(hide_overlay_on_main_thread)
 
         self.mouse_tracker.set_on_button_release(on_button_release)
 
