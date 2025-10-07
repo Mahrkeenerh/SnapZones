@@ -342,6 +342,86 @@ class WindowManager:
             print(f"Error getting window by ID: {e}", file=sys.stderr)
             return None
 
+    def monitor_window_movements(self, on_move_start=None, on_move_update=None, on_move_end=None):
+        """
+        Monitor window movement events and call callbacks
+
+        Args:
+            on_move_start: Callback(window_id, x, y) when window starts moving
+            on_move_update: Callback(window_id, x, y) when window position updates
+            on_move_end: Callback(window_id, x, y) when window stops moving
+
+        Note: This is a blocking call that runs an event loop
+        """
+        import time
+        from collections import defaultdict
+
+        # Subscribe to ConfigureNotify events on all windows
+        self.root.change_attributes(event_mask=X.SubstructureNotifyMask)
+
+        # Track window movement state
+        window_positions = {}  # window_id -> (x, y, timestamp)
+        moving_windows = set()  # window_ids currently moving
+
+        MOVE_TIMEOUT = 0.15  # seconds without movement to consider stopped
+
+        print("Monitoring window movements... (Press Ctrl+C to stop)", flush=True)
+
+        while True:
+            # Check for X11 events (non-blocking)
+            while self.display.pending_events():
+                event = self.display.next_event()
+
+                if event.type == X.ConfigureNotify:
+                    window_id = event.window.id
+                    x, y = event.x, event.y
+                    timestamp = time.time()
+
+                    # Check if this is a normal window we care about
+                    try:
+                        window = self.display.create_resource_object('window', window_id)
+                        if not self.is_normal_window(window):
+                            continue
+                    except:
+                        continue
+
+                    # Check if window actually moved
+                    if window_id in window_positions:
+                        old_x, old_y, old_time = window_positions[window_id]
+                        if old_x == x and old_y == y:
+                            continue  # No actual movement
+
+                        # Window moved
+                        if window_id not in moving_windows:
+                            # Movement started
+                            moving_windows.add(window_id)
+                            if on_move_start:
+                                on_move_start(window_id, x, y)
+                        else:
+                            # Movement continuing
+                            if on_move_update:
+                                on_move_update(window_id, x, y)
+
+                    window_positions[window_id] = (x, y, timestamp)
+
+            # Check for windows that stopped moving
+            current_time = time.time()
+            stopped_windows = []
+            for window_id in list(moving_windows):
+                if window_id in window_positions:
+                    x, y, timestamp = window_positions[window_id]
+                    if current_time - timestamp > MOVE_TIMEOUT:
+                        stopped_windows.append((window_id, x, y))
+                        moving_windows.remove(window_id)
+
+            for window_id, x, y in stopped_windows:
+                if on_move_end:
+                    on_move_end(window_id, x, y)
+
+            # Small sleep to avoid busy waiting
+            time.sleep(0.01)
+            self.display.flush()
+
     def close(self):
         """Clean up display connection"""
         if self.display:

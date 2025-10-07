@@ -11,23 +11,29 @@ import time
 from .window_manager import WindowManager
 from .zone import Zone, ZoneManager
 from .overlay import OverlayManager
-from .input_monitor import InputMonitor
+from .input_monitor import KeyboardTracker, MouseTracker
 
 
 class WindowSnapper:
     """Manages window snapping to zones"""
 
-    def __init__(self):
+    def __init__(self, trigger_modifier: str = 'alt'):
         self.window_manager = WindowManager()
         self.zone_manager = ZoneManager()
         self.overlay_manager = OverlayManager()
-        self.input_monitor = InputMonitor()
+        self.keyboard_tracker = KeyboardTracker()
+        self.mouse_tracker = MouseTracker()
+
+        # Configuration
+        self.trigger_modifier = trigger_modifier.lower()  # 'shift', 'ctrl', 'alt', 'super'
 
         # State tracking
         self._active_window_id: Optional[int] = None
         self._original_geometry: Optional[Tuple[int, int, int, int]] = None
         self._is_snapping = False
         self._selected_zone: Optional[Zone] = None
+        self._overlay_visible = False
+        self._window_is_moving = False
 
         # Workspace support
         self._workspace_zones: Dict[int, ZoneManager] = {}
@@ -211,25 +217,99 @@ class WindowSnapper:
         """Hide the overlay"""
         self.overlay_manager.hide()
 
+    def _is_trigger_modifier_pressed(self) -> bool:
+        """Check if the configured trigger modifier is currently pressed"""
+        if self.trigger_modifier == 'shift':
+            return self.keyboard_tracker.is_shift_pressed
+        elif self.trigger_modifier == 'ctrl':
+            return self.keyboard_tracker.is_ctrl_pressed
+        elif self.trigger_modifier == 'alt':
+            return self.keyboard_tracker.is_alt_pressed
+        elif self.trigger_modifier == 'super':
+            return self.keyboard_tracker.is_super_pressed
+        return False
+
     def start_snap_workflow(self):
         """
         Start the complete snap workflow:
-        1. Monitor for Shift+drag
-        2. Show overlay when drag detected
-        3. Highlight zone under cursor
-        4. Snap window on release
+        1. Monitor for window drag with modifier key pressed
+        2. Show overlay when drag starts with modifier
+        3. Hide overlay when modifier is released
+        4. Snap window when zone is selected
         """
         print("Starting snap workflow...")
-        print("Super+drag a window to snap it to a zone")
+        print(f"Hold {self.trigger_modifier.upper()} and drag a window to snap it to a zone")
+        print(f"Release {self.trigger_modifier.upper()} to cancel")
+        print("Click on a zone to snap the window")
         print("Press Escape to cancel")
         print("Press Ctrl+C to exit")
 
-        # Get active window at start
-        active_window = self.window_manager.get_active_window()
-        if active_window:
-            self._active_window_id = active_window.window_id
-            self._original_geometry = (active_window.x, active_window.y, active_window.width, active_window.height)
-            print(f"Tracking window {self._active_window_id}")
+        # Start keyboard and mouse trackers
+        self.keyboard_tracker.start()
+        self.mouse_tracker.start()
+
+        # Set up mouse button release callback
+        def on_button_release(button_name: str):
+            """Called when any mouse button is released"""
+            if button_name == 'left' and self._window_is_moving and self._overlay_visible:
+                print("Mouse button released - hiding overlay")
+
+                def hide_overlay_on_main_thread():
+                    self.overlay_manager.hide()
+                    self._overlay_visible = False
+                    self._is_snapping = False
+                    self._window_is_moving = False
+                    self._active_window_id = None
+                    return False
+
+                GLib.idle_add(hide_overlay_on_main_thread)
+
+        self.mouse_tracker.set_on_button_release(on_button_release)
+
+        # Set up keyboard modifier change callback
+        def on_modifier_change(shift: bool, ctrl: bool, alt: bool, super_key: bool):
+            """Called when modifier keys change state"""
+            modifier_pressed = self._is_trigger_modifier_pressed()
+
+            # If overlay is visible and modifier released, hide overlay
+            if self._overlay_visible and not modifier_pressed:
+                print(f"{self.trigger_modifier.upper()} released - hiding overlay")
+
+                def hide_overlay_on_main_thread():
+                    self.overlay_manager.hide()
+                    self._overlay_visible = False
+                    self._is_snapping = False
+                    self._active_window_id = None
+                    return False
+
+                GLib.idle_add(hide_overlay_on_main_thread)
+
+            # If window is moving, modifier pressed, but overlay not visible, show overlay
+            elif self._window_is_moving and modifier_pressed and not self._overlay_visible:
+                print(f"{self.trigger_modifier.upper()} pressed during drag - showing overlay")
+
+                def show_overlay_on_main_thread():
+                    if not self._is_trigger_modifier_pressed():
+                        return False
+
+                    self._is_snapping = True
+                    self._overlay_visible = True
+
+                    # Show overlay
+                    workspace = self.get_current_workspace()
+                    zm = self.load_workspace_zones(workspace)
+
+                    if len(zm) > 0:
+                        self.overlay_manager.show(list(zm))
+                        print(f"Overlay shown with {len(zm)} zones", flush=True)
+                    else:
+                        print("No zones configured", flush=True)
+
+                    return False
+
+                GLib.idle_add(show_overlay_on_main_thread)
+
+        self.keyboard_tracker.set_on_modifier_change(on_modifier_change)
 
         # Set up overlay callbacks
         overlay = self.overlay_manager.create_overlay()
@@ -238,39 +318,52 @@ class WindowSnapper:
             print(f"Zone selected: {zone}")
             self._selected_zone = zone
 
-            # Snap active window to zone
+            # Snap window to zone
             if self._active_window_id:
                 success = self.snap_window_to_zone(self._active_window_id, zone)
                 if success:
-                    print(f"Snapped window to {zone}")
+                    print(f"Snapped window {self._active_window_id} to {zone}")
                 else:
                     print("Failed to snap window")
 
         def on_overlay_hidden():
             print("Overlay hidden")
             self._is_snapping = False
+            self._active_window_id = None
+            self._overlay_visible = False
 
         overlay.set_on_zone_selected(on_zone_selected)
         overlay.set_on_overlay_hidden(on_overlay_hidden)
 
-        # Set up input monitor callbacks
-        def on_modifier_drag_start(x: int, y: int, shift: bool, ctrl: bool, alt: bool, super_key: bool):
-            """Called when drag starts with modifiers"""
-            # Check if Super is pressed (our trigger modifier)
-            if not super_key:
+        # Set up window movement callbacks
+        def on_move_start(window_id: int, x: int, y: int):
+            """Called when window starts moving"""
+            self._window_is_moving = True
+            self._active_window_id = window_id
+
+            # Store original geometry
+            try:
+                window = self.window_manager.display.create_resource_object('window', window_id)
+                geom = self.window_manager.get_window_geometry(window)
+                self._original_geometry = geom
+            except Exception as e:
+                print(f"Failed to get window geometry: {e}")
+
+            # Only show overlay if trigger modifier is pressed
+            if not self._is_trigger_modifier_pressed():
+                print(f"Window {window_id} started moving (no modifier)")
                 return
 
-            print(f"Super+drag started at ({x}, {y})", flush=True)
+            print(f"Window {window_id} started moving with {self.trigger_modifier.upper()} at ({x}, {y})", flush=True)
 
             def show_overlay_on_main_thread():
                 """Execute GTK operations on main thread"""
-                self._is_snapping = True
+                # Double-check modifier is still pressed
+                if not self._is_trigger_modifier_pressed():
+                    return False
 
-                # Get currently active window
-                active_window = self.window_manager.get_active_window()
-                if active_window:
-                    self._active_window_id = active_window.window_id
-                    self._original_geometry = (active_window.x, active_window.y, active_window.width, active_window.height)
+                self._is_snapping = True
+                self._overlay_visible = True
 
                 # Show overlay
                 workspace = self.get_current_workspace()
@@ -287,21 +380,23 @@ class WindowSnapper:
             # Schedule GTK operations on main thread
             GLib.idle_add(show_overlay_on_main_thread)
 
-        def on_modifier_drag_end(x: int, y: int, shift: bool, ctrl: bool, alt: bool, super_key: bool):
-            """Called when drag ends with modifiers"""
-            if not super_key:
-                return
+        def on_move_update(window_id: int, x: int, y: int):
+            """Called when window position updates"""
+            # Could update UI here if needed
+            pass
 
-            print(f"Super+drag ended at ({x}, {y})")
+        def on_move_end(window_id: int, x: int, y: int):
+            """Called when window stops moving (position unchanged for timeout period)"""
+            # Don't mark window as not moving here - wait for mouse button release
+            if self._active_window_id == window_id:
+                print(f"Window {window_id} stopped moving at ({x}, {y}) - waiting for mouse release")
 
-            # Don't auto-hide overlay - let zone click handle it
-            # or let Escape cancel it
-
-        self.input_monitor.set_on_modifier_drag_start(on_modifier_drag_start)
-        self.input_monitor.set_on_modifier_drag_end(on_modifier_drag_end)
-
-        # Start monitoring in separate thread
-        monitor_thread = threading.Thread(target=self.input_monitor.start, daemon=True)
+        # Start window movement monitoring in separate thread
+        monitor_thread = threading.Thread(
+            target=self.window_manager.monitor_window_movements,
+            args=(on_move_start, on_move_update, on_move_end),
+            daemon=True
+        )
         monitor_thread.start()
 
         # Run GTK main loop
@@ -309,15 +404,16 @@ class WindowSnapper:
             Gtk.main()
         except KeyboardInterrupt:
             print("\nExiting...")
-            self.input_monitor.stop()
+            self.keyboard_tracker.stop()
+            self.mouse_tracker.stop()
             self.overlay_manager.destroy()
 
 
 class SnapperCLI:
     """Command-line interface for the snapper"""
 
-    def __init__(self):
-        self.snapper = WindowSnapper()
+    def __init__(self, trigger_modifier: str = 'alt'):
+        self.snapper = WindowSnapper(trigger_modifier=trigger_modifier)
 
     def run_interactive(self):
         """Run interactive snapping workflow"""
@@ -373,7 +469,9 @@ def main():
 
     parser = argparse.ArgumentParser(description='SnapZones Window Snapper')
     parser.add_argument('--interactive', action='store_true',
-                       help='Run interactive snap workflow (Shift+drag to snap)')
+                       help='Run interactive snap workflow (modifier+drag to snap)')
+    parser.add_argument('--modifier', choices=['shift', 'ctrl', 'alt', 'super'],
+                       default='alt', help='Modifier key to trigger snapping (default: alt)')
     parser.add_argument('--snap-active', metavar='PRESET',
                        choices=['halves', 'thirds', 'quarters', 'grid3x3'],
                        help='Snap active window to first zone of preset')
@@ -384,7 +482,7 @@ def main():
 
     args = parser.parse_args()
 
-    cli = SnapperCLI()
+    cli = SnapperCLI(trigger_modifier=args.modifier)
 
     if args.interactive:
         cli.run_interactive()
