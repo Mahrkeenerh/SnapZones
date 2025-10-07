@@ -34,6 +34,7 @@ class WindowSnapper:
         self._selected_zone: Optional[Zone] = None
         self._overlay_visible = False
         self._window_is_moving = False
+        self._last_snap_time: float = 0  # Timestamp of last snap to prevent immediate re-trigger
 
         # Workspace support
         self._workspace_zones: Dict[int, ZoneManager] = {}
@@ -45,7 +46,7 @@ class WindowSnapper:
 
         Args:
             window_id: X11 window ID
-            zone: Zone to snap to
+            zone: Zone to snap to (with relative coordinates 0.0-1.0)
             animate: Whether to animate the transition (optional)
 
         Returns:
@@ -62,9 +63,20 @@ class WindowSnapper:
             if self._original_geometry is None:
                 self._original_geometry = (x, y, width, height)
 
+            # Get screen dimensions to convert relative coordinates to absolute
+            screen = self.window_manager.display.screen()
+            screen_width = screen.width_in_pixels
+            screen_height = screen.height_in_pixels
+
+            # Convert relative zone coordinates (0.0-1.0) to absolute pixels
+            abs_x = int(zone.x * screen_width)
+            abs_y = int(zone.y * screen_height)
+            abs_width = int(zone.width * screen_width)
+            abs_height = int(zone.height * screen_height)
+
             # Move and resize window to zone
             success = self.window_manager.move_resize_window(
-                window_id, zone.x, zone.y, zone.width, zone.height
+                window_id, abs_x, abs_y, abs_width, abs_height
             )
 
             return success
@@ -255,18 +267,30 @@ class WindowSnapper:
                 # Always clear window moving state on mouse release
                 self._window_is_moving = False
 
-                # Only hide overlay if it's visible
+                # Only process if overlay is visible
                 if self._overlay_visible:
-                    print("Mouse button released - hiding overlay")
+                    print("Mouse button released - checking for zone under cursor")
 
-                    def hide_overlay_on_main_thread():
+                    def check_zone_and_snap():
+                        # Get the currently highlighted zone from overlay
+                        overlay = self.overlay_manager.overlay
+                        if overlay:
+                            highlighted_zone = overlay.get_highlighted_zone()
+                            if highlighted_zone and self._active_window_id:
+                                print(f"Snapping to highlighted zone: {highlighted_zone}")
+                                self.snap_window_to_zone(self._active_window_id, highlighted_zone)
+                                # Record snap time to prevent immediate re-trigger
+                                import time
+                                self._last_snap_time = time.time()
+
+                        # Hide overlay after processing
                         self.overlay_manager.hide()
                         self._overlay_visible = False
                         self._is_snapping = False
                         self._active_window_id = None
                         return False
 
-                    GLib.idle_add(hide_overlay_on_main_thread)
+                    GLib.idle_add(check_zone_and_snap)
                 else:
                     # Just clear the active window ID
                     self._active_window_id = None
@@ -287,12 +311,14 @@ class WindowSnapper:
                     self._overlay_visible = False
                     self._is_snapping = False
                     self._active_window_id = None
+                    # Don't clear _window_is_moving here - user might still be dragging
                     return False
 
                 GLib.idle_add(hide_overlay_on_main_thread)
 
             # If window is moving, modifier pressed, but overlay not visible, show overlay
-            elif self._window_is_moving and modifier_pressed and not self._overlay_visible:
+            # Only show if mouse button is actually pressed (still dragging)
+            elif self._window_is_moving and modifier_pressed and not self._overlay_visible and self.mouse_tracker.is_left_pressed:
                 print(f"{self.trigger_modifier.upper()} pressed during drag - showing overlay")
 
                 def show_overlay_on_main_thread():
@@ -345,6 +371,13 @@ class WindowSnapper:
         # Set up window movement callbacks
         def on_move_start(window_id: int, x: int, y: int):
             """Called when window starts moving"""
+            # Check if this is too soon after a snap (within 50ms)
+            import time
+            time_since_snap = time.time() - self._last_snap_time
+            if time_since_snap < 0.05:
+                print(f"Ignoring window movement {time_since_snap:.3f}s after snap")
+                return
+
             self._window_is_moving = True
             self._active_window_id = window_id
 

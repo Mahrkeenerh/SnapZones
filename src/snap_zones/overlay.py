@@ -21,6 +21,7 @@ class OverlayWindow(Gtk.Window):
         self.selected_zone: Optional[Zone] = None
         self.mouse_x = 0
         self.mouse_y = 0
+        self._mouse_poll_timer = None
 
         # Callbacks
         self._on_zone_selected_callback: Optional[Callable[[Zone], None]] = None
@@ -229,16 +230,55 @@ class OverlayWindow(Gtk.Window):
 
     def _get_zone_at_point(self, x: int, y: int) -> Optional[Zone]:
         """Get the zone at specified point (smallest zone if overlapping)"""
-        matching_zones = [z for z in self.zones if z.contains_point(x, y)]
+        # Get screen dimensions for coordinate conversion
+        allocation = self.get_allocation()
+        screen_width = allocation.width
+        screen_height = allocation.height
+
+        # Convert absolute mouse coordinates to relative (0.0-1.0)
+        rel_x = x / screen_width
+        rel_y = y / screen_height
+
+        # Check zones using relative coordinates
+        matching_zones = []
+        for z in self.zones:
+            if (z.x <= rel_x < z.x + z.width and
+                z.y <= rel_y < z.y + z.height):
+                matching_zones.append(z)
+
         if not matching_zones:
             return None
         # Return smallest zone (most specific)
-        return min(matching_zones, key=lambda z: z.area)
+        return min(matching_zones, key=lambda z: z.width * z.height)
 
     def set_zones(self, zones: List[Zone]):
         """Set the zones to display"""
         self.zones = zones
         self.queue_draw()
+
+    def _poll_mouse_position(self):
+        """Poll mouse position and update highlighted zone"""
+        # Get current mouse position from the display
+        display = self.get_display()
+        seat = display.get_default_seat()
+        pointer = seat.get_pointer()
+
+        screen, x, y = pointer.get_position()
+
+        # Update mouse position
+        self.mouse_x = x
+        self.mouse_y = y
+
+        # Find zone under cursor
+        new_highlighted = self._get_zone_at_point(x, y)
+
+        # Update highlight if changed
+        if new_highlighted != self.highlighted_zone:
+            self.highlighted_zone = new_highlighted
+            self.queue_draw()
+
+        # Continue polling
+        return True
 
     def show_overlay(self):
         """Show the overlay"""
@@ -247,8 +287,17 @@ class OverlayWindow(Gtk.Window):
         self.grab_focus()
         self.queue_draw()
 
+        # Start polling mouse position (needed because dragging a window blocks motion events)
+        if self._mouse_poll_timer is None:
+            self._mouse_poll_timer = GLib.timeout_add(50, self._poll_mouse_position)  # Poll every 50ms
+
     def hide_overlay(self):
         """Hide the overlay"""
+        # Stop mouse polling
+        if self._mouse_poll_timer is not None:
+            GLib.source_remove(self._mouse_poll_timer)
+            self._mouse_poll_timer = None
+
         self.hide()
 
         # Trigger callback
