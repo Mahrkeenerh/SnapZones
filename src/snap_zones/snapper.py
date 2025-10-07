@@ -12,6 +12,7 @@ from .window_manager import WindowManager
 from .zone import Zone, ZoneManager
 from .overlay import OverlayManager
 from .input_monitor import KeyboardTracker, MouseTracker
+from .layout_library import LayoutLibrary
 
 
 class WindowSnapper:
@@ -19,7 +20,8 @@ class WindowSnapper:
 
     def __init__(self, trigger_modifier: str = 'alt'):
         self.window_manager = WindowManager()
-        self.zone_manager = ZoneManager()
+        self.zone_manager = ZoneManager()  # Keep for compatibility
+        self.layout_library = LayoutLibrary()
         self.overlay_manager = OverlayManager()
         self.keyboard_tracker = KeyboardTracker()
         self.mouse_tracker = MouseTracker()
@@ -37,7 +39,6 @@ class WindowSnapper:
         self._last_snap_time: float = 0  # Timestamp of last snap to prevent immediate re-trigger
 
         # Workspace support
-        self._workspace_zones: Dict[int, ZoneManager] = {}
         self._current_workspace = 0
 
     def snap_window_to_zone(self, window_id: int, zone: Zone, animate: bool = False) -> bool:
@@ -149,61 +150,28 @@ class WindowSnapper:
             print(f"Error getting current workspace: {e}")
             return 0
 
-    def load_workspace_zones(self, workspace: Optional[int] = None) -> ZoneManager:
+    def load_workspace_zones(self, workspace: Optional[int] = None) -> List[Zone]:
         """
-        Load zones for a specific workspace
+        Load zones for a specific workspace using layout library
 
         Args:
             workspace: Workspace number (None = current workspace)
 
         Returns:
-            ZoneManager for the workspace
+            List of zones for the workspace
         """
         if workspace is None:
             workspace = self.get_current_workspace()
 
-        # Check if zones already loaded for this workspace
-        if workspace in self._workspace_zones:
-            return self._workspace_zones[workspace]
+        # Load layout for this workspace
+        layout = self.layout_library.get_workspace_layout(workspace)
 
-        # Create new zone manager for this workspace
-        zm = ZoneManager()
-        zones_file = f"{zm.config_dir}/zones_ws{workspace}.json"
-
-        # Try to load workspace-specific zones
-        if zm.load_from_file(zones_file):
-            print(f"Loaded zones for workspace {workspace}")
+        if layout:
+            print(f"Loaded layout '{layout.name}' for workspace {workspace} ({len(layout.zones)} zones)")
+            return list(layout.zones)
         else:
-            # Fall back to default zones.json
-            default_file = f"{zm.config_dir}/zones.json"
-            if zm.load_from_file(default_file):
-                print(f"Loaded default zones for workspace {workspace}")
-            else:
-                print(f"No zones found for workspace {workspace}")
-
-        self._workspace_zones[workspace] = zm
-        return zm
-
-    def save_workspace_zones(self, workspace: Optional[int] = None) -> bool:
-        """
-        Save zones for a specific workspace
-
-        Args:
-            workspace: Workspace number (None = current workspace)
-
-        Returns:
-            True if successful, False otherwise
-        """
-        if workspace is None:
-            workspace = self.get_current_workspace()
-
-        if workspace not in self._workspace_zones:
-            return False
-
-        zm = self._workspace_zones[workspace]
-        zones_file = f"{zm.config_dir}/zones_ws{workspace}.json"
-
-        return zm.save_to_file(zones_file)
+            print(f"No layout found for workspace {workspace}")
+            return []
 
     def show_overlay_at_cursor(self) -> Optional[Zone]:
         """
@@ -214,14 +182,14 @@ class WindowSnapper:
         """
         # Load zones for current workspace
         workspace = self.get_current_workspace()
-        zm = self.load_workspace_zones(workspace)
+        zones = self.load_workspace_zones(workspace)
 
-        if len(zm) == 0:
+        if len(zones) == 0:
             print("No zones configured for current workspace")
             return None
 
         # Show overlay
-        self.overlay_manager.show(list(zm))
+        self.overlay_manager.show(zones)
 
         return None  # Zone selection handled by callback
 
@@ -330,11 +298,11 @@ class WindowSnapper:
 
                     # Show overlay
                     workspace = self.get_current_workspace()
-                    zm = self.load_workspace_zones(workspace)
+                    zones = self.load_workspace_zones(workspace)
 
-                    if len(zm) > 0:
-                        self.overlay_manager.show(list(zm))
-                        print(f"Overlay shown with {len(zm)} zones", flush=True)
+                    if len(zones) > 0:
+                        self.overlay_manager.show(zones)
+                        print(f"Overlay shown with {len(zones)} zones", flush=True)
                     else:
                         print("No zones configured", flush=True)
 
@@ -407,11 +375,11 @@ class WindowSnapper:
 
                 # Show overlay
                 workspace = self.get_current_workspace()
-                zm = self.load_workspace_zones(workspace)
+                zones = self.load_workspace_zones(workspace)
 
-                if len(zm) > 0:
-                    self.overlay_manager.show(list(zm))
-                    print(f"Overlay shown with {len(zm)} zones", flush=True)
+                if len(zones) > 0:
+                    self.overlay_manager.show(zones)
+                    print(f"Overlay shown with {len(zones)} zones", flush=True)
                 else:
                     print("No zones configured", flush=True)
 

@@ -2,191 +2,146 @@
 
 Linux window management tool inspired by Windows PowerToys FancyZones.
 
-## Project Setup ✅
+---
 
-- Python venv with `python-xlib>=0.33`, `pynput>=1.7.6`
-- Config directory: `~/.config/snapzones/`
+## Project Status Summary
+
+### Completed Phases ✅
+
+**Phase 1-5**: Core functionality complete
+- **Window Management** (Phase 1): X11-based window detection, manipulation, zone data structures
+- **Input Monitoring** (Phase 2): Global mouse/keyboard tracking, modifier detection, hotkey system
+- **Overlay System** (Phase 3): Transparent fullscreen overlay, zone visualization, hit detection
+- **Snapping Logic** (Phase 4): Modifier+drag workflow, workspace support, snap-to-zone
+- **Zone Editor** (Phase 5): WYSIWYG fullscreen editor, in-place zone creation/editing, preset layouts
+
+### Technology Stack
+- **Platform**: Linux X11
+- **Language**: Python 3.10+
+- **GUI**: GTK3 + Cairo
+- **Input**: python-xlib, pynput
+- **Config**: JSON files in `~/.config/snapzones/`
+
+### Key Features Implemented
+- Fullscreen transparent overlay for zone editing and snapping
+- Modifier key + drag to trigger zone overlay
+- Click or release over zone to snap window
+- Preset layouts (halves, thirds, quarters, 3x3 grid)
+- WYSIWYG zone editor with drag, resize, delete operations
+- 8-handle resize system (corners + edges)
+- **Global layout library system** (v0.6.0)
+  - Multiple named layouts stored globally
+  - Workspace-to-layout mappings
+  - Visual layout manager dialog
+  - Auto-save on all zone modifications
+  - Deep copy to prevent layout cross-contamination
+- Zone persistence in JSON format
 
 ---
 
-## Phase 1: Core Window Management ✅
+## Current Implementation (v0.6.0)
 
-**Date:** 2025-10-07 | **File:** `src/snap_zones/window_manager.py`
-
-### Implemented
-- **WindowManager**: List windows, get active window, move/resize windows
-- **Zone**: Geometric zones with overlap detection, JSON persistence
-- **ZoneManager**: CRUD operations, preset layouts (halves/thirds/quarters/grid3x3)
-
-### CLI
-```bash
-python src/snap_zones/window_manager.py --list
-python src/snap_zones/window_manager.py --move-active X Y W H
-python src/snap_zones/zone.py --create-preset quarters --save FILE
+### File Structure
+```
+src/snap_zones/
+├── __init__.py
+├── window_manager.py      # X11 window operations
+├── zone.py                # Zone data structures, presets
+├── input_monitor.py       # Mouse/keyboard tracking, hotkeys
+├── overlay.py             # Transparent zone overlay
+├── snapper.py             # Core snapping orchestration
+├── zone_editor.py         # Fullscreen zone editor with layout manager
+├── layout_library.py      # Global layout library management
+└── layout_selector.py     # GTK layout selector dialog
 ```
 
-### Key Features
-- X11 `_NET_*` protocols for window management
-- UTF-8 window titles, automatic unmaximize
-- JSON zone persistence with version field
-- Smallest-zone-first priority for overlapping zones
+### Configuration Files
+- `~/.config/snapzones/layouts/*.json` - Named layout files
+- `~/.config/snapzones/workspace_layouts.json` - Workspace-to-layout mappings
+- Auto-loads workspace-assigned layouts, falls back to "default"
 
----
-
-## Phase 2: Input Monitoring System ✅
-
-**Date:** 2025-10-07 | **File:** `src/snap_zones/input_monitor.py`
-
-### Implemented
-- **MouseTracker**: Position, drag detection, button states
-- **KeyboardTracker**: Modifier keys (Shift/Ctrl/Alt/Super)
-- **InputMonitor**: Combined mouse+keyboard with modifier-aware drag
-- **HotkeyManager**: Global hotkey registration and triggering
-
-### CLI
+### CLI Commands
 ```bash
-python src/snap_zones/input_monitor.py --track-drag --duration 10
-python src/snap_zones/input_monitor.py --track-shift-drag --duration 15
-python src/snap_zones/input_monitor.py --test-hotkeys --duration 15
+# Window management
+python -m snap_zones.window_manager --list
+python -m snap_zones.window_manager --move-active X Y W H
+
+# Zone creation
+python -m snap_zones.zone --create-preset quarters --save FILE
+
+# Input monitoring
+python -m snap_zones.input_monitor --track-shift-drag
+python -m snap_zones.input_monitor --test-hotkeys
+
+# Overlay testing
+python -m snap_zones.overlay --show --preset grid3x3
+
+# Interactive snapping
+python -m snap_zones.snapper --interactive --modifier alt
+
+# Zone editor
+python -m snap_zones.zone_editor
+
+# Layout management
+python -m snap_zones.layout_library --list
+python -m snap_zones.layout_library --show LAYOUT_NAME
+python -m snap_zones.layout_library --create LAYOUT_NAME
+python -m snap_zones.layout_library --delete LAYOUT_NAME
+python -m snap_zones.layout_library --set-workspace WORKSPACE_ID LAYOUT_NAME
+python -m snap_zones.layout_library --list-workspaces
+
+# Layout selector dialog
+python -m snap_zones.layout_selector --workspace WORKSPACE_ID
 ```
-
-### Key Features
-- `pynput` for global input monitoring
-- Drag operations with modifier detection
-- Hotkey registration with arbitrary modifier combinations
-- Non-blocking listeners in separate threads
-
----
-
-## Phase 3: Overlay Rendering System ✅
-
-**Date:** 2025-10-07 | **File:** `src/snap_zones/overlay.py`
-
-### Implemented
-- **OverlayWindow**: Full-screen transparent GTK window with zone display
-- **Zone Visualization**: Semi-transparent colored zones with borders and labels
-- **Hit Detection**: Mouse hover highlighting, click selection
-- **OverlayManager**: Lifecycle management for overlay window
-
-### CLI
-```bash
-python src/snap_zones/overlay.py --show --preset quarters --duration 10
-python src/snap_zones/overlay.py --show --load FILE --duration 30
-python src/snap_zones/overlay.py --show --preset grid3x3
-```
-
-### Key Features
-- GTK3/Cairo for transparent overlay rendering
-- Real-time mouse hover highlighting
-- Click-to-select zone functionality
-- Escape key to cancel
-- Smallest-zone-first priority for overlapping zones
-
----
-
-## Phase 4: Core Snapping Logic ✅
-
-**Date:** 2025-10-07 | **File:** `src/snap_zones/snapper.py`
-
-### Implemented
-- **WindowSnapper**: Core snapping orchestration with window management integration
-- **Workspace Support**: Load/save workspace-specific zone configurations
-- **Snap-to-Zone**: Move and resize active window to selected zone
-- **Shift+Drag Integration**: Complete workflow with InputMonitor and OverlayManager
-
-### CLI
-```bash
-# Snap active window to preset
-python src/snap_zones/snapper.py --snap-active quarters
-
-# Interactive Shift+drag workflow
-python src/snap_zones/snapper.py --interactive
-
-# List workspaces with zone counts
-python src/snap_zones/snapper.py --list-workspaces
-```
-
-### Key Features
-- WindowSnapper orchestrates all components (WindowManager, ZoneManager, OverlayManager, InputMonitor)
-- Workspace-aware zone loading: `zones_ws0.json`, `zones_ws1.json`, etc.
-- Fallback to default `zones.json` if workspace-specific zones not found
-- Original window geometry tracking for restore functionality
-- Shift+drag callbacks in InputMonitor trigger overlay display
-- Zone selection triggers snap-to-zone operation
-
----
-
-## Phase 5: Zone Editor ✅
-
-**Date:** 2025-10-07 | **File:** `src/snap_zones/zone_editor.py`
-
-### Implemented
-- **ZoneEditorOverlay**: Fullscreen transparent overlay for zone editing
-- **In-Place Editing**: Draw and edit zones directly over desktop (WYSIWYG)
-- **Zone Manipulation**: Select, move, resize, and delete zones
-- **Visual Feedback**: Resize handles, selection highlighting, zone labels
-- **Preset Integration**: Apply built-in layout presets via keyboard shortcuts
-- **Keyboard Controls**: Complete keyboard-driven workflow
-
-### CLI
-```bash
-# Launch fullscreen zone editor overlay
-python -m src.snap_zones.zone_editor
-
-# Load existing layout
-python -m src.snap_zones.zone_editor --load ~/.config/snapzones/zones.json
-```
-
-### Key Features (Block 5.1: Basic Canvas Editor)
-- Fullscreen transparent GTK overlay (not a window)
-- Draw zones directly over actual desktop for precise positioning
-- Semi-transparent zone rendering with borders and labels
-- Real-time visual feedback during drawing
-- Auto-load existing zones from `~/.config/snapzones/zones.json`
-
-### Key Features (Block 5.2: Zone Manipulation)
-- Click to select zones (smallest zone priority for overlaps)
-- Drag selected zone to move (orange highlight when selected)
-- Resize via 8 handles (corners + edges): nw, ne, sw, se, n, s, e, w
-- Delete selected zone with Delete key
-- Canvas bounds enforcement and minimum zone size (3%)
-- Status bar at bottom shows current operation
-
-### Key Features (Block 5.3: Preset System)
-- Number key shortcuts for presets: 1=halves, 2=thirds, 3=quarters, 4=grid3x3
-- Integration with existing ZoneManager preset system
-- Status bar shows applied preset and zone count
 
 ### Keyboard Controls
-- **ESC**: Exit editor
-- **H**: Toggle help panel
-- **S**: Save zones to `~/.config/snapzones/zones.json`
-- **L**: Load zones from file
-- **N**: New (clear all zones)
-- **Delete**: Delete selected zone
-- **1-4**: Apply preset layouts
 
-### Visual Design
-- Blue zones (unselected): semi-transparent for desktop visibility
-- Orange zones (selected): shows 8 white resize handles
-- Help panel: centered dark overlay with all controls listed
-- Status bar: bottom of screen with operation feedback
+**Zone Editor**:
+- Click & Drag: Draw new zone (auto-saves)
+- Click zone: Select zone
+- Drag selected: Move zone (auto-saves)
+- Drag handles: Resize zone (auto-saves)
+- `ESC`: Exit editor
+- `H`: Toggle help
+- `S`: Save zones (manual save)
+- `L`: Layout manager (create/switch/delete layouts)
+  - Single-click: Select layout
+  - Double-click: Load layout
+  - "Create New": Dialog prompts for name
+  - "Delete Selected": Delete with confirmation
+- `N`: Clear all zones (auto-saves)
+- `Delete`: Delete selected zone (auto-saves)
+- `1-4`: Apply presets (halves/thirds/quarters/grid) (auto-saves)
 
-### System Requirements
-- GTK3 development libraries: `libgirepository1.0-dev`, `libcairo2-dev`, `pkg-config`, `python3-dev`
-- Python packages: `PyGObject>=3.42,<3.50`, `pycairo>=1.20.0`
+**Snapping** (runtime):
+- `Modifier + Drag Window`: Show overlay
+- Release over zone: Snap window
+- `ESC`: Cancel
 
 ---
 
-## Phase 6: Keyboard Navigation ⏸️
+## Pending Work
 
-**Status:** Pending
+### Phase 6: Keyboard Navigation ⏸️
+- Directional zone movement (Super+Arrows)
+
+### Phase 7: Polish & System Integration ⏸️
+- System tray indicator
+- Settings dialog
+- Autostart integration
+- Deployment packaging
 
 ---
 
-## Phase 7: Polish & System Integration ⏸️
+## Next Development Phase
 
-**Status:** Pending
+**Goal**: Implement keyboard navigation for zone switching
+
+See `IMPLEMENTATION_PLAN_V2.md` for detailed plan.
+
+**Remaining Features**:
+- Simple arrow-key navigation (position-based ordering)
+- Super+Arrow keys to move windows between zones
 
 ---
 
@@ -197,3 +152,10 @@ python -m src.snap_zones.zone_editor --load ~/.config/snapzones/zones.json
 - **v0.3.0** (2025-10-07) - Phase 3: Overlay Rendering System
 - **v0.4.0** (2025-10-07) - Phase 4: Core Snapping Logic
 - **v0.5.0** (2025-10-07) - Phase 5: Zone Editor
+- **v0.6.0** (2025-10-07) - Phase 6: Layout Library System
+  - Global layout library with named layouts
+  - Workspace-to-layout mapping system
+  - Visual layout manager in zone editor
+  - Layout selector dialog for workspace assignment
+  - Auto-save functionality
+  - Deep copy fix for layout isolation

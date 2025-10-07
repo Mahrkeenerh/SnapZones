@@ -17,7 +17,7 @@ Controls:
 - Delete key: Delete selected zone
 - Escape: Exit editor
 - S: Save zones
-- L: Load zones
+- L: Layout manager (switch/create layouts)
 - N: New (clear all)
 - 1-4: Apply presets (1=halves, 2=thirds, 3=quarters, 4=grid3x3)
 """
@@ -30,6 +30,7 @@ import json
 import os
 from typing import List, Optional, Tuple
 from .zone import Zone, ZoneManager, create_preset_layout
+from .layout_library import LayoutLibrary, Layout
 
 
 class ZoneEditorOverlay(Gtk.Window):
@@ -48,10 +49,12 @@ class ZoneEditorOverlay(Gtk.Window):
     HELP_BG_COLOR = (0.1, 0.1, 0.1, 0.85)
     HELP_TEXT_COLOR = (1.0, 1.0, 1.0, 1.0)
 
-    def __init__(self):
+    def __init__(self, initial_layout: Optional[str] = None):
         super().__init__()
 
         self.zone_manager = ZoneManager()
+        self.layout_library = LayoutLibrary()
+        self.current_layout_name: Optional[str] = initial_layout or "default"
         self.current_file: Optional[str] = None
 
         self.zones: List[Zone] = []
@@ -70,15 +73,15 @@ class ZoneEditorOverlay(Gtk.Window):
         self.zone_original_rect: Optional[Tuple[int, int, int, int]] = None
 
         # Status message
-        self.status_message = "Zone Editor - Draw zones, ESC to exit, H for help"
+        self.status_message = f"Editing: {self.current_layout_name} - Draw zones, ESC to exit, H for help"
         self.show_help = False
 
         # Setup window
         self._setup_window()
         self._setup_events()
 
-        # Auto-load default zones if they exist
-        self._auto_load_zones()
+        # Auto-load current layout
+        self._load_current_layout()
 
     def _setup_window(self):
         """Setup fullscreen transparent window"""
@@ -111,17 +114,20 @@ class ZoneEditorOverlay(Gtk.Window):
             Gdk.EventMask.KEY_PRESS_MASK
         )
 
-    def _auto_load_zones(self):
-        """Auto-load zones from default location if available"""
-        default_file = os.path.expanduser("~/.config/snapzones/zones.json")
-        if os.path.exists(default_file):
-            try:
-                if self.zone_manager.load_from_file(default_file):
-                    self.zones = list(self.zone_manager.zones)
-                    self.current_file = default_file
-                    self.status_message = f"Loaded {len(self.zones)} zones from zones.json"
-            except Exception as e:
-                self.status_message = f"Failed to load default zones: {e}"
+    def _load_current_layout(self):
+        """Load the current layout from the layout library"""
+        if not self.current_layout_name:
+            self.current_layout_name = "default"
+
+        layout = self.layout_library.load_layout(self.current_layout_name)
+        if layout:
+            # Create deep copies of zones to avoid modifying the cached layout
+            self.zones = [Zone(z.x, z.y, z.width, z.height, z.name, z.color) for z in layout.zones]
+            self.status_message = f"Editing: {self.current_layout_name} ({len(self.zones)} zones)"
+        else:
+            # Layout doesn't exist yet - start with empty zones
+            self.zones = []
+            self.status_message = f"Editing: {self.current_layout_name} (new layout)"
 
     def on_draw(self, widget, cr: cairo.Context):
         """Draw zones, handles, and UI"""
@@ -388,6 +394,7 @@ class ZoneEditorOverlay(Gtk.Window):
                 self.zones.append(new_zone)
                 self.selected_zone = new_zone
                 self.status_message = f"Created {new_zone.name}"
+                self._auto_save()
 
             self.is_drawing = False
             self.draw_start = None
@@ -401,6 +408,7 @@ class ZoneEditorOverlay(Gtk.Window):
             self.move_start = None
             self.zone_original_rect = None
             self.status_message = f"Moved {self.selected_zone.name if self.selected_zone else 'zone'}"
+            self._auto_save()
             return True
 
         # Finish resizing
@@ -409,6 +417,7 @@ class ZoneEditorOverlay(Gtk.Window):
             self.resize_handle = None
             self.move_start = None
             self.zone_original_rect = None
+            self._auto_save()
             self.status_message = f"Resized {self.selected_zone.name if self.selected_zone else 'zone'}"
             return True
 
@@ -468,9 +477,9 @@ class ZoneEditorOverlay(Gtk.Window):
             self._save_zones()
             return True
 
-        # L - Load
+        # L - Layout picker (visual menu)
         if keyname in ('l', 'L'):
-            self._load_zones()
+            self._show_layout_picker()
             return True
 
         # N - New (clear all)
@@ -479,6 +488,7 @@ class ZoneEditorOverlay(Gtk.Window):
             self.selected_zone = None
             self.current_file = None
             self.status_message = "Cleared all zones"
+            self._auto_save()
             self.queue_draw()
             return True
 
@@ -487,6 +497,7 @@ class ZoneEditorOverlay(Gtk.Window):
             zone_name = self.selected_zone.name
             self.zones.remove(self.selected_zone)
             self.selected_zone = None
+            self._auto_save()
             self.status_message = f"Deleted {zone_name}"
             self.queue_draw()
             return True
@@ -520,6 +531,7 @@ class ZoneEditorOverlay(Gtk.Window):
                 self.zones.append(rel_zone)
             self.selected_zone = None
             self.status_message = f"Applied preset: {preset_name} ({len(self.zones)} zones)"
+            self._auto_save()
             self.queue_draw()
             return True
 
@@ -622,44 +634,249 @@ class ZoneEditorOverlay(Gtk.Window):
         return None
 
     def _save_zones(self):
-        """Save zones to file"""
-        if not self.current_file:
-            # Default to zones.json
-            config_dir = os.path.expanduser("~/.config/snapzones")
-            os.makedirs(config_dir, exist_ok=True)
-            self.current_file = os.path.join(config_dir, "zones.json")
+        """Save zones to current layout"""
+        if not self.current_layout_name:
+            self.current_layout_name = "default"
 
         try:
-            self.zone_manager.zones = self.zones
-            self.zone_manager.save_to_file(self.current_file)
-            self.status_message = f"Saved {len(self.zones)} zones to {os.path.basename(self.current_file)}"
+            # Check if layout exists
+            layout = self.layout_library.load_layout(self.current_layout_name)
+            if layout:
+                # Update existing layout
+                layout.update_zones(self.zones)
+                self.layout_library.save_layout(layout)
+            else:
+                # Create new layout
+                self.layout_library.create_layout(self.current_layout_name, self.zones, "")
+
+            self.status_message = f"Saved {len(self.zones)} zones to layout '{self.current_layout_name}'"
         except Exception as e:
             self.status_message = f"Failed to save: {e}"
 
         self.queue_draw()
 
-    def _load_zones(self):
-        """Load zones from file"""
-        if not self.current_file:
-            config_dir = os.path.expanduser("~/.config/snapzones")
-            self.current_file = os.path.join(config_dir, "zones.json")
-
-        if not os.path.exists(self.current_file):
-            self.status_message = f"File not found: {self.current_file}"
-            self.queue_draw()
-            return
+    def _auto_save(self):
+        """Auto-save zones silently (no status message)"""
+        if not self.current_layout_name:
+            self.current_layout_name = "default"
 
         try:
-            if self.zone_manager.load_from_file(self.current_file):
-                self.zones = list(self.zone_manager.zones)
-                self.selected_zone = None
-                self.status_message = f"Loaded {len(self.zones)} zones from {os.path.basename(self.current_file)}"
+            layout = self.layout_library.load_layout(self.current_layout_name)
+            if layout:
+                layout.update_zones(self.zones)
+                self.layout_library.save_layout(layout)
             else:
-                self.status_message = f"Failed to load from {os.path.basename(self.current_file)}"
+                self.layout_library.create_layout(self.current_layout_name, self.zones, "")
         except Exception as e:
-            self.status_message = f"Failed to load: {e}"
+            print(f"Auto-save failed: {e}")
 
-        self.queue_draw()
+    def _show_layout_picker(self):
+        """Show visual dialog to select or create layout"""
+        dialog = Gtk.Dialog(
+            title="Layout Manager",
+            parent=self,
+            modal=True
+        )
+        dialog.set_default_size(400, 350)
+
+        # Content area
+        content = dialog.get_content_area()
+        content.set_spacing(10)
+        content.set_margin_start(15)
+        content.set_margin_end(15)
+        content.set_margin_top(15)
+        content.set_margin_bottom(15)
+
+        # Header label
+        header = Gtk.Label()
+        header.set_markup(f"<b>Current Layout: {self.current_layout_name}</b>")
+        header.set_halign(Gtk.Align.START)
+        content.pack_start(header, False, False, 0)
+
+        # Scrollable list of layouts
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scrolled.set_vexpand(True)
+        content.pack_start(scrolled, True, True, 0)
+
+        # List box for layouts
+        listbox = Gtk.ListBox()
+        listbox.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        listbox.set_activate_on_single_click(False)  # Only activate on double-click
+
+        # Connect double-click handler
+        def on_row_activated(listbox, row):
+            """Handle double-click on layout"""
+            if hasattr(row, 'layout_name'):
+                self.current_layout_name = row.layout_name
+                self._load_current_layout()
+                self.selected_zone = None
+                self.queue_draw()
+                dialog.response(Gtk.ResponseType.CLOSE)
+
+        listbox.connect("row-activated", on_row_activated)
+        scrolled.add(listbox)
+
+        # Populate layouts
+        layouts = self.layout_library.list_layouts()
+        for layout_name in sorted(layouts):
+            row = Gtk.ListBoxRow()
+            row.layout_name = layout_name
+
+            hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+            hbox.set_margin_start(10)
+            hbox.set_margin_end(10)
+            hbox.set_margin_top(5)
+            hbox.set_margin_bottom(5)
+
+            # Layout name with star if current
+            label = Gtk.Label()
+            if layout_name == self.current_layout_name:
+                label.set_markup(f"<b>{layout_name}</b> ★")
+            else:
+                label.set_text(layout_name)
+            label.set_halign(Gtk.Align.START)
+            hbox.pack_start(label, True, True, 0)
+
+            # Zone count
+            layout = self.layout_library.load_layout(layout_name)
+            if layout:
+                count_label = Gtk.Label(label=f"{len(layout.zones)} zones")
+                count_label.get_style_context().add_class("dim-label")
+                hbox.pack_start(count_label, False, False, 0)
+
+            row.add(hbox)
+            listbox.add(row)
+
+            # Select current layout
+            if layout_name == self.current_layout_name:
+                listbox.select_row(row)
+
+        # Buttons
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        dialog.add_button("Delete Selected", Gtk.ResponseType.REJECT)
+        dialog.add_button("Load Selected", Gtk.ResponseType.OK)
+        dialog.add_button("Create New", Gtk.ResponseType.APPLY)
+
+        dialog.show_all()
+
+        # Handle response
+        response = dialog.run()
+
+        if response == Gtk.ResponseType.OK:
+            # Load selected layout
+            selected_row = listbox.get_selected_row()
+            if selected_row and hasattr(selected_row, 'layout_name'):
+                self.current_layout_name = selected_row.layout_name
+                self._load_current_layout()
+                self.selected_zone = None
+                self.queue_draw()
+
+        elif response == Gtk.ResponseType.APPLY:
+            # Prompt for new layout name
+            name_dialog = Gtk.MessageDialog(
+                transient_for=dialog,
+                modal=True,
+                message_type=Gtk.MessageType.QUESTION,
+                buttons=Gtk.ButtonsType.OK_CANCEL,
+                text="Create New Layout"
+            )
+            name_dialog.format_secondary_text("Enter a name for the new layout:")
+
+            # Add text entry to dialog
+            content_area = name_dialog.get_content_area()
+            entry = Gtk.Entry()
+
+            # Suggest default name
+            base_name = "layout"
+            counter = 1
+            default_name = base_name
+            existing_layouts = self.layout_library.list_layouts()
+            while default_name in existing_layouts:
+                default_name = f"{base_name}{counter}"
+                counter += 1
+
+            entry.set_text(default_name)
+            entry.set_activates_default(True)
+            content_area.pack_start(entry, False, False, 5)
+            name_dialog.show_all()
+
+            name_response = name_dialog.run()
+            new_name = entry.get_text().strip()
+            name_dialog.destroy()
+
+            if name_response == Gtk.ResponseType.OK and new_name:
+                # Sanitize name
+                safe_name = "".join(c for c in new_name if c.isalnum() or c in (' ', '-', '_')).strip()
+
+                if safe_name:
+                    # Check if name already exists
+                    if safe_name in self.layout_library.list_layouts():
+                        error_dialog = Gtk.MessageDialog(
+                            transient_for=dialog,
+                            modal=True,
+                            message_type=Gtk.MessageType.ERROR,
+                            buttons=Gtk.ButtonsType.OK,
+                            text="Layout already exists"
+                        )
+                        error_dialog.format_secondary_text(f"A layout named '{safe_name}' already exists. Please choose a different name.")
+                        error_dialog.run()
+                        error_dialog.destroy()
+                    else:
+                        self.current_layout_name = safe_name
+                        # Clear zones for new layout
+                        self.zones.clear()
+                        self.selected_zone = None
+                        self.status_message = f"Created new layout: {safe_name}"
+                        # Save the empty layout immediately
+                        self._auto_save()
+                        self.queue_draw()
+                else:
+                    self.status_message = "Invalid layout name"
+                    self.queue_draw()
+
+        elif response == Gtk.ResponseType.REJECT:
+            # Delete selected layout
+            selected_row = listbox.get_selected_row()
+            if selected_row and hasattr(selected_row, 'layout_name'):
+                layout_to_delete = selected_row.layout_name
+
+                # Confirm deletion
+                confirm_dialog = Gtk.MessageDialog(
+                    transient_for=dialog,
+                    modal=True,
+                    message_type=Gtk.MessageType.QUESTION,
+                    buttons=Gtk.ButtonsType.YES_NO,
+                    text=f"Delete layout '{layout_to_delete}'?"
+                )
+                confirm_dialog.format_secondary_text("This action cannot be undone.")
+
+                confirm_response = confirm_dialog.run()
+                confirm_dialog.destroy()
+
+                if confirm_response == Gtk.ResponseType.YES:
+                    # Delete the layout
+                    if self.layout_library.delete_layout(layout_to_delete):
+                        self.status_message = f"Deleted layout: {layout_to_delete}"
+
+                        # If we deleted the current layout, switch to another or create new
+                        if layout_to_delete == self.current_layout_name:
+                            remaining = self.layout_library.list_layouts()
+                            if remaining:
+                                self.current_layout_name = remaining[0]
+                                self._load_current_layout()
+                            else:
+                                # No layouts left, create default
+                                self.current_layout_name = "default"
+                                self.zones.clear()
+
+                        self.selected_zone = None
+                        self.queue_draw()
+                    else:
+                        self.status_message = f"Failed to delete layout: {layout_to_delete}"
+                        self.queue_draw()
+
+        dialog.destroy()
 
 
 def main():
