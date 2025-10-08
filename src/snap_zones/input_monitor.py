@@ -482,6 +482,9 @@ class Hotkey:
 
     def matches(self, shift: bool, ctrl: bool, alt: bool, super_key: bool, pressed_key: str) -> bool:
         """Check if current state matches this hotkey"""
+        if pressed_key is None:
+            return False
+
         current_mods = set()
         if shift:
             current_mods.add('shift')
@@ -560,6 +563,10 @@ class HotkeyManager:
         if not self._enabled:
             return
 
+        # Debug: Print key presses for troubleshooting
+        if key_name and key_name.lower() == 'tab':
+            print(f"[DEBUG] Tab pressed - Shift:{self._keyboard.is_shift_pressed} Super:{self._keyboard.is_super_pressed} Alt:{self._keyboard.is_alt_pressed}")
+
         # Check all registered hotkeys
         for hotkey in self._hotkeys:
             if hotkey.matches(
@@ -570,6 +577,7 @@ class HotkeyManager:
                 key_name
             ):
                 # Trigger hotkey callback
+                print(f"[HOTKEY] Matched: {hotkey}")
                 try:
                     hotkey.callback()
                 except Exception as e:

@@ -1,0 +1,78 @@
+#!/bin/bash
+# SnapZones Status and Management Utility
+
+PID_FILE="$HOME/.config/snapzones/daemon.pid"
+LOG_FILE="/tmp/snapzones.log"
+
+check_running() {
+    if [ -f "$PID_FILE" ]; then
+        PID=$(cat "$PID_FILE")
+        if kill -0 "$PID" 2>/dev/null; then
+            return 0  # Running
+        else
+            # Stale PID file
+            rm -f "$PID_FILE"
+            return 1  # Not running
+        fi
+    fi
+    return 1  # Not running
+}
+
+case "${1:-status}" in
+    status)
+        if check_running; then
+            PID=$(cat "$PID_FILE")
+            echo "SnapZones daemon is running (PID: $PID)"
+            exit 0
+        else
+            echo "SnapZones daemon is not running"
+            exit 1
+        fi
+        ;;
+
+    stop)
+        if check_running; then
+            PID=$(cat "$PID_FILE")
+            echo "Stopping SnapZones daemon (PID: $PID)..."
+            kill "$PID"
+            sleep 1
+            if kill -0 "$PID" 2>/dev/null; then
+                echo "Daemon did not stop, forcing..."
+                kill -9 "$PID"
+            fi
+            rm -f "$PID_FILE"
+            echo "Daemon stopped"
+        else
+            echo "Daemon is not running"
+        fi
+        ;;
+
+    restart)
+        $0 stop
+        sleep 1
+        echo "Starting daemon..."
+        snapzones &
+        sleep 1
+        $0 status
+        ;;
+
+    logs)
+        if [ -f "$LOG_FILE" ]; then
+            tail -f "$LOG_FILE"
+        else
+            echo "No log file found at $LOG_FILE"
+            exit 1
+        fi
+        ;;
+
+    *)
+        echo "Usage: snapzones-status {status|stop|restart|logs}"
+        echo ""
+        echo "Commands:"
+        echo "  status   - Check if daemon is running"
+        echo "  stop     - Stop the daemon"
+        echo "  restart  - Restart the daemon"
+        echo "  logs     - View daemon logs (tail -f)"
+        exit 1
+        ;;
+esac

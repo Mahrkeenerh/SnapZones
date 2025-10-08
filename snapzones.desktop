@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=SnapZones
+Comment=Window snapping zones for Linux
+Exec=/home/samo/.local/bin/snapzones
+Icon=preferences-system-windows
+Terminal=false
+Categories=Utility;
+StartupNotify=false
+X-GNOME-Autostart-enabled=true
+Hidden=false

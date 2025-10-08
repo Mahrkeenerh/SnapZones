@@ -300,6 +300,8 @@ class LayoutLibrary:
         Returns:
             Layout name or None if no mapping exists
         """
+        # Reload mappings from disk to get latest changes
+        self._load_workspace_mappings()
         return self._workspace_mappings.get(workspace_id)
 
     def set_active_layout(self, workspace_id: int, layout_name: str) -> bool:

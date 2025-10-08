@@ -62,7 +62,13 @@ class ZoneEditorOverlay(Gtk.Window):
 
         self.zone_manager = ZoneManager()
         self.layout_library = LayoutLibrary()
-        self.current_layout_name: Optional[str] = initial_layout or "default"
+
+        # X11 display for workspace detection
+        import Xlib.display
+        self.x_display = Xlib.display.Display()
+
+        # Will be set after workspace detection
+        self.current_layout_name: Optional[str] = initial_layout
         self.current_file: Optional[str] = None
 
         self.zones: List[Zone] = []
@@ -133,10 +139,28 @@ class ZoneEditorOverlay(Gtk.Window):
             Gdk.EventMask.KEY_PRESS_MASK
         )
 
+    def get_current_workspace(self) -> int:
+        """Get the current workspace number from X11"""
+        try:
+            root = self.x_display.screen().root
+            current_desktop = root.get_full_property(
+                self.x_display.intern_atom('_NET_CURRENT_DESKTOP'),
+                0  # Xlib.X.AnyPropertyType
+            )
+            if current_desktop:
+                return current_desktop.value[0]
+            return 0
+        except Exception as e:
+            print(f"Error getting current workspace: {e}")
+            return 0
+
     def _load_current_layout(self):
         """Load the current layout from the layout library"""
         if not self.current_layout_name:
-            self.current_layout_name = "default"
+            # Auto-detect layout for current workspace
+            workspace_id = self.get_current_workspace()
+            workspace_layout = self.layout_library.get_active_layout(workspace_id)
+            self.current_layout_name = workspace_layout or "default"
 
         layout = self.layout_library.load_layout(self.current_layout_name)
         if layout:
@@ -833,6 +857,13 @@ class ZoneEditorOverlay(Gtk.Window):
                 self._refresh_layout_manager()
                 self.queue_draw()
 
+                # Auto-map current workspace to selected layout
+                workspace_id = self.get_current_workspace()
+                if self.layout_library.set_active_layout(workspace_id, row.layout_name):
+                    print(f"Auto-mapped workspace {workspace_id} → layout '{row.layout_name}'")
+                else:
+                    print(f"Failed to auto-map workspace {workspace_id} to layout '{row.layout_name}'")
+
         self.layout_listbox.connect("row-activated", on_row_activated)
 
         # Connect button press for slow click rename
@@ -986,6 +1017,13 @@ class ZoneEditorOverlay(Gtk.Window):
                     self._auto_save()
                     self._refresh_layout_manager()
                     self.queue_draw()
+
+                    # Auto-map current workspace to new layout
+                    workspace_id = self.get_current_workspace()
+                    if self.layout_library.set_active_layout(workspace_id, safe_name):
+                        print(f"Auto-mapped workspace {workspace_id} → layout '{safe_name}'")
+                    else:
+                        print(f"Failed to auto-map workspace {workspace_id} to layout '{safe_name}'")
             else:
                 self.status_message = "Invalid layout name"
                 self.queue_draw()

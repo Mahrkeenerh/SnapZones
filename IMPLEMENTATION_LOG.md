@@ -4,6 +4,56 @@ Linux window management tool inspired by Windows PowerToys FancyZones.
 
 ---
 
+## Recent Changes
+
+### 2025-10-08: Complete Workspace-Layout Auto-Mapping System
+
+**Summary**: Implemented automatic workspace-to-layout mapping with live reload support, plus non-interactive installation scripts.
+
+#### 1. Auto-mapping When Switching Layouts
+- **Feature**: When switching layouts in the editor (via double-click or creating new layout), the current workspace is automatically mapped to that layout
+- **Implementation**:
+  - Added X11 display connection to `ZoneEditorOverlay.__init__()` for workspace detection
+  - Added `get_current_workspace()` method to query X11's `_NET_CURRENT_DESKTOP` property
+  - Updated `on_row_activated()` handler to call `layout_library.set_active_layout()` on double-click
+  - Updated `_on_create_layout()` to auto-map new layouts to current workspace
+  - Updates `workspace_layouts.json` automatically
+- **Files Modified**: `src/snap_zones/zone_editor.py`
+
+#### 2. Daemon Live Reload of Workspace Mappings
+- **Feature**: Daemon now picks up workspace mapping changes immediately without restart
+- **Implementation**:
+  - Modified `LayoutLibrary.get_active_layout()` to call `self._load_workspace_mappings()` on every request
+  - This reloads the mappings from disk, ensuring changes made by the editor are immediately available
+- **Files Modified**: `src/snap_zones/layout_library.py`
+- **User Impact**: Changes to workspace mappings take effect immediately when Alt+Dragging windows
+
+#### 3. Editor Auto-Loads Workspace Layout
+- **Feature**: Zone editor now starts with the layout assigned to the current workspace instead of always using "default"
+- **Implementation**:
+  - Modified `_load_current_layout()` to auto-detect workspace and load assigned layout
+  - Falls back to "default" if no mapping exists
+- **Files Modified**: `src/snap_zones/zone_editor.py`
+
+#### 4. Non-Interactive Install/Uninstall Scripts
+- **Feature**: Added `-y`/`--yes` flags to avoid hanging when running scripts in automated contexts
+- **Implementation**:
+  - Added `NON_INTERACTIVE` flag parsing to both scripts
+  - Modified all `read -p` prompts to check flag and skip in non-interactive mode
+  - Allows running `./uninstall.sh -y && ./install.sh -y` without hanging
+- **Files Modified**: `install.sh`, `uninstall.sh`
+- **User Impact**: Scripts can now be run in automated/scripted environments
+
+#### Overall User Impact
+Users no longer need to:
+- Manually edit `workspace_layouts.json` to map workspaces to layouts
+- Restart the daemon after changing workspace mappings
+- Manually select the correct layout when opening the editor on different workspaces
+
+The system now provides a seamless workflow where layouts automatically follow workspaces.
+
+---
+
 ## Project Status Summary
 
 ### Completed Phases ✅
@@ -45,7 +95,7 @@ Linux window management tool inspired by Windows PowerToys FancyZones.
 
 ---
 
-## Current Implementation (v0.6.2)
+## Current Implementation (v0.7.0 - Deployment Ready)
 
 ### File Structure
 ```
@@ -53,11 +103,21 @@ src/snap_zones/
 ├── __init__.py
 ├── window_manager.py      # X11 window operations
 ├── zone.py                # Zone data structures, presets
-├── input_monitor.py       # Mouse/keyboard tracking, hotkeys
+├── input_monitor.py       # Mouse/keyboard tracking
 ├── overlay.py             # Transparent zone overlay
 ├── snapper.py             # Core snapping orchestration
 ├── zone_editor.py         # Fullscreen zone editor with integrated layout manager
-└── layout_library.py      # Global layout library management
+├── layout_library.py      # Global layout library management
+└── daemon.py              # Background service (Alt+drag monitoring)
+
+bin/
+├── snapzones              # Daemon launcher
+├── snapzones-editor       # Zone editor launcher
+└── snapzones-status       # Daemon management utility
+
+install.sh                 # Installation script
+uninstall.sh              # Uninstallation script
+snapzones.desktop         # Autostart configuration
 ```
 
 ### Configuration Files
@@ -128,16 +188,24 @@ python -m snap_zones.layout_library --list-workspaces
 
 ---
 
-## Pending Work
+## Deployment Complete (v0.7.0) ✅
 
-### Phase 6: Keyboard Navigation ⏸️
-- Directional zone movement (Super+Arrows)
+### Phase 6: Basic Deployment (COMPLETED)
+- ✅ Background daemon with PID locking
+- ✅ Native GNOME keyboard shortcut (Super+Shift+Tab via gsettings)
+- ✅ Installation script with dependency checking
+- ✅ Uninstallation script
+- ✅ Autostart integration
+- ✅ Status management utility
 
-### Phase 7: Polish & System Integration ⏸️
-- System tray indicator
-- Settings dialog
-- Autostart integration
-- Deployment packaging
+### Known Issues & Future Enhancements
+
+**Pending Features**:
+- ⏸️ Keyboard navigation (Super+Arrow keys to move windows between zones)
+- ⏸️ System tray indicator
+- ⏸️ Settings dialog
+- ⏸️ Multi-zone proximity snapping
+- ⏸️ Magnetic edge snapping in editor
 
 ---
 
@@ -173,3 +241,13 @@ See `IMPLEMENTATION_PLAN_V2.md` for detailed plan.
   - Removed duplicate layout selector dialog (consolidated into zone editor)
   - Repositioned layout manager window from top-right to center
   - Layout rename updates all workspace mappings automatically
+- **v0.7.0** (2025-10-08) - Deployment & Native Integration
+  - Background daemon service with PID locking
+  - Native GNOME keyboard shortcut integration (gsettings)
+  - Removed HotkeyManager (conflicted with system shortcuts)
+  - Installation/uninstallation scripts
+  - Autostart configuration
+  - Status management utility (snapzones-status)
+  - Full documentation and README update
+  - Fixed import bug (List type in snapper.py)
+  - Fixed workspace-layout mapping bug
