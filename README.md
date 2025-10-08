@@ -1,5 +1,9 @@
 # SnapZones
 
+<p align="center">
+  <img src="assets/logo.png" alt="SnapZones Logo" width="400"/>
+</p>
+
 Linux window management tool inspired by Windows PowerToys FancyZones. Snap windows to predefined zones using keyboard modifiers and visual overlays.
 
 ## Features
@@ -171,11 +175,20 @@ The daemon automatically reloads the mappings, so changes take effect immediatel
 - ✅ Status management utility
 - ✅ Auto-map workspace to layout when switching layouts in editor
 
-**Planned**:
-- ⏸️ Keyboard navigation (Super+Arrow keys to move windows between zones)
-- ⏸️ System tray indicator
-- ⏸️ Settings dialog
-- ⏸️ Deployment packaging
+**Planned Features**:
+
+### Keyboard Navigation
+- **Arrow key zone movement**: Super+Arrow keys to move windows between zones
+  - Horizontal ordering (Left/Right): Sort zones by (x, then y)
+  - Vertical ordering (Up/Down): Sort zones by (y, then x)
+  - Cycle through zones with wrapping
+
+### System Integration & Polish
+- **System tray indicator**: AppIndicator3 with menu for quick access
+- **Settings dialog**: Configure keyboard shortcuts, modifier keys, behavior settings
+- **Multi-zone proximity snapping**: Snap to combined area when near multiple zones
+- **Magnetic edge snapping in editor**: Toggle to snap zone edges to other zones
+- **Deployment packaging**: Create setup.py and distribution packages
 
 ## Development
 

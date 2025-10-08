@@ -93,8 +93,15 @@ echo "Setting up installation directories..."
 mkdir -p "$BIN_DIR"
 mkdir -p "$AUTOSTART_DIR"
 mkdir -p "$HOME/.config/snapzones/layouts"
+mkdir -p "$HOME/.local/share/icons"
 
 echo "✓ Directories created"
+echo ""
+
+# Install icon
+echo "Installing icon..."
+cp "$SCRIPT_DIR/assets/icon.png" "$HOME/.local/share/icons/snapzones.png"
+echo "✓ Icon installed to ~/.local/share/icons/"
 echo ""
 
 # Install entry point scripts

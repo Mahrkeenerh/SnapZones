@@ -30,7 +30,14 @@ echo ""
 echo "Removing installed scripts..."
 rm -f "$BIN_DIR/snapzones"
 rm -f "$BIN_DIR/snapzones-editor"
+rm -f "$BIN_DIR/snapzones-status"
 echo "✓ Scripts removed"
+echo ""
+
+# Remove icon
+echo "Removing icon..."
+rm -f "$HOME/.local/share/icons/snapzones.png"
+echo "✓ Icon removed"
 echo ""
 
 # Remove autostart
