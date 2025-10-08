@@ -19,7 +19,8 @@ Controls:
 - H: Toggle help
 - D: Toggle dimension display
 - S: Save zones
-- N: New (clear all)
+- C: Clear all zones
+- N: New layout
 - 1-4: Apply presets (1=halves, 2=thirds, 3=quarters, 4=grid3x3)
 
 Layout Manager (always visible):
@@ -370,7 +371,8 @@ class ZoneEditorOverlay(Gtk.Window):
             "  H       - Toggle this help",
             "  D       - Toggle dimension display",
             "  S       - Save zones",
-            "  N       - New (clear all)",
+            "  C       - Clear all zones",
+            "  N       - New layout",
             "  Delete  - Delete selected zone",
             "",
             "Presets:",
@@ -572,8 +574,8 @@ class ZoneEditorOverlay(Gtk.Window):
             self._save_zones()
             return True
 
-        # N - New (clear all)
-        if keyname in ('n', 'N'):
+        # C - Clear all zones
+        if keyname in ('c', 'C'):
             self.zones.clear()
             self.selected_zone = None
             self.current_file = None
@@ -581,6 +583,11 @@ class ZoneEditorOverlay(Gtk.Window):
             self._auto_save()
             self._refresh_layout_manager()
             self.queue_draw()
+            return True
+
+        # N - New layout
+        if keyname in ('n', 'N'):
+            self._on_create_layout()
             return True
 
         # Delete - Remove selected zone
@@ -1045,7 +1052,7 @@ class ZoneEditorOverlay(Gtk.Window):
         if (row == self.layout_last_click_row and
             row == self.layout_listbox.get_selected_row() and
             current_time - self.layout_last_click_time > 0.5 and
-            current_time - self.layout_last_click_time < 3.0):
+            current_time - self.layout_last_click_time < 1.0):
             # Trigger rename
             self._start_rename_layout(row.layout_name)
             return True
