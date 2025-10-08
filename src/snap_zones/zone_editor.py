@@ -777,8 +777,17 @@ class ZoneEditorOverlay(Gtk.Window):
         window.set_type_hint(Gdk.WindowTypeHint.UTILITY)  # Make it a utility window
         window.set_skip_taskbar_hint(True)  # Don't show in taskbar
 
-        # Position in center of screen
-        window.set_position(Gtk.WindowPosition.CENTER)
+        # Position offset from center (500px to the left)
+        screen = self.get_screen()
+        screen_width = screen.get_width()
+        screen_height = screen.get_height()
+        window_width = 300
+        window_height = 400
+
+        x_pos = (screen_width - window_width) // 2 - 500
+        y_pos = (screen_height - window_height) // 2
+
+        window.move(x_pos, y_pos)
 
         self.layout_manager_window = window
 
@@ -1057,7 +1066,9 @@ class ZoneEditorOverlay(Gtk.Window):
                 self._start_rename_layout(selected_row.layout_name)
                 return True
 
-        return False
+        # Forward all other shortcuts to the main overlay's key handler
+        # This allows all shortcuts to work even when layout manager has focus
+        return self.on_key_press(widget, event)
 
     def _on_rename_layout(self):
         """Handle Rename button click"""
