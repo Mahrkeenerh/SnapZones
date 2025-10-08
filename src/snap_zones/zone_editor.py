@@ -458,11 +458,25 @@ class ZoneEditorOverlay(Gtk.Window):
                 rel_x2 = max(x1, x2) / alloc.width
                 rel_y2 = max(y1, y2) / alloc.height
 
+                # Find first available zone number
+                existing_numbers = set()
+                for zone in self.zones:
+                    if zone.name.startswith("Zone "):
+                        try:
+                            num = int(zone.name.split()[1])
+                            existing_numbers.add(num)
+                        except (ValueError, IndexError):
+                            pass
+
+                zone_number = 1
+                while zone_number in existing_numbers:
+                    zone_number += 1
+
                 new_zone = Zone(
                     rel_x1, rel_y1,
                     rel_x2 - rel_x1,
                     rel_y2 - rel_y1,
-                    name=f"Zone {len(self.zones) + 1}"
+                    name=f"Zone {zone_number}"
                 )
                 self.zones.append(new_zone)
                 self.selected_zone = new_zone
