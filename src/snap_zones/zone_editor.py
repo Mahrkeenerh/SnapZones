@@ -16,8 +16,10 @@ Controls:
 - Drag resize handles: Resize zone
 - Delete key: Delete selected zone
 - Escape: Exit editor
+- H: Toggle help
+- D: Toggle dimension display
 - S: Save zones
-- L: Layout manager (switch/create layouts)
+- L: Layout manager (switch/create/delete layouts)
 - N: New (clear all)
 - 1-4: Apply presets (1=halves, 2=thirds, 3=quarters, 4=grid3x3)
 """
@@ -75,6 +77,10 @@ class ZoneEditorOverlay(Gtk.Window):
         # Status message
         self.status_message = f"Editing: {self.current_layout_name} - Draw zones, ESC to exit, H for help"
         self.show_help = False
+        self.show_dimensions = True  # Toggle for dimension display (default ON)
+
+        # Layout manager window (always visible)
+        self.layout_manager_window = None
 
         # Setup window
         self._setup_window()
@@ -82,6 +88,9 @@ class ZoneEditorOverlay(Gtk.Window):
 
         # Auto-load current layout
         self._load_current_layout()
+
+        # Show layout manager window
+        self._create_layout_manager_window()
 
     def _setup_window(self):
         """Setup fullscreen transparent window"""
@@ -209,6 +218,10 @@ class ZoneEditorOverlay(Gtk.Window):
             cr.move_to(text_x, text_y)
             cr.show_text(zone.name)
 
+        # Draw dimensions if enabled
+        if self.show_dimensions:
+            self._draw_zone_dimensions(cr, x, y, w, h)
+
         # Draw resize handles if selected
         if is_selected:
             self._draw_handles(cr, x, y, w, h)
@@ -247,6 +260,53 @@ class ZoneEditorOverlay(Gtk.Window):
                 self.HANDLE_SIZE
             )
             cr.stroke()
+
+    def _draw_zone_dimensions(self, cr: cairo.Context, x: int, y: int, w: int, h: int):
+        """Draw zone dimensions and coordinates overlay - CaptiX-inspired styling"""
+        cr.select_font_face("Arial", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+        cr.set_font_size(12)
+
+        padding = 6
+        margin = 10  # Margin from zone edges
+
+        # TOP-LEFT: Position (X: Y: format)
+        pos_text = f"X: {x}  Y: {y}"
+        pos_extents = cr.text_extents(pos_text)
+        pos_bg_width = pos_extents.width + 2 * padding
+        pos_bg_height = pos_extents.height + 2 * padding
+
+        pos_bg_x = x + margin
+        pos_bg_y = y + margin
+
+        # Draw position background (semi-transparent dark)
+        cr.set_source_rgba(0.0, 0.0, 0.0, 0.47)  # ~120/255 alpha
+        cr.rectangle(pos_bg_x, pos_bg_y, pos_bg_width, pos_bg_height)
+        cr.fill()
+
+        # Draw position text (white)
+        cr.set_source_rgb(1.0, 1.0, 1.0)
+        cr.move_to(pos_bg_x + padding, pos_bg_y + padding + pos_extents.height)
+        cr.show_text(pos_text)
+
+        # BOTTOM-RIGHT: Size (W × H format)
+        size_text = f"{w} × {h}"
+        size_extents = cr.text_extents(size_text)
+        size_bg_width = size_extents.width + 2 * padding
+        size_bg_height = size_extents.height + 2 * padding
+
+        # Anchor to bottom-right, inside zone
+        size_bg_x = x + w - size_bg_width - margin
+        size_bg_y = y + h - size_bg_height - margin
+
+        # Draw size background (semi-transparent dark)
+        cr.set_source_rgba(0.0, 0.0, 0.0, 0.47)
+        cr.rectangle(size_bg_x, size_bg_y, size_bg_width, size_bg_height)
+        cr.fill()
+
+        # Draw size text (white)
+        cr.set_source_rgb(1.0, 1.0, 1.0)
+        cr.move_to(size_bg_x + padding, size_bg_y + padding + size_extents.height)
+        cr.show_text(size_text)
 
     def _draw_status_bar(self, cr: cairo.Context, width: int, height: int):
         """Draw status bar at bottom of screen"""
@@ -299,8 +359,9 @@ class ZoneEditorOverlay(Gtk.Window):
             "Keyboard Shortcuts:",
             "  ESC     - Exit editor",
             "  H       - Toggle this help",
+            "  D       - Toggle dimension display",
             "  S       - Save zones",
-            "  L       - Load zones",
+            "  L       - Layout manager",
             "  N       - New (clear all)",
             "  Delete  - Delete selected zone",
             "",
@@ -395,6 +456,7 @@ class ZoneEditorOverlay(Gtk.Window):
                 self.selected_zone = new_zone
                 self.status_message = f"Created {new_zone.name}"
                 self._auto_save()
+                self._refresh_layout_manager()
 
             self.is_drawing = False
             self.draw_start = None
@@ -472,6 +534,13 @@ class ZoneEditorOverlay(Gtk.Window):
             self.queue_draw()
             return True
 
+        # D - Toggle dimension display
+        if keyname in ('d', 'D'):
+            self.show_dimensions = not self.show_dimensions
+            self.status_message = f"Dimension display: {'ON' if self.show_dimensions else 'OFF'}"
+            self.queue_draw()
+            return True
+
         # S - Save
         if keyname in ('s', 'S'):
             self._save_zones()
@@ -489,6 +558,7 @@ class ZoneEditorOverlay(Gtk.Window):
             self.current_file = None
             self.status_message = "Cleared all zones"
             self._auto_save()
+            self._refresh_layout_manager()
             self.queue_draw()
             return True
 
@@ -498,6 +568,7 @@ class ZoneEditorOverlay(Gtk.Window):
             self.zones.remove(self.selected_zone)
             self.selected_zone = None
             self._auto_save()
+            self._refresh_layout_manager()
             self.status_message = f"Deleted {zone_name}"
             self.queue_draw()
             return True
@@ -532,6 +603,7 @@ class ZoneEditorOverlay(Gtk.Window):
             self.selected_zone = None
             self.status_message = f"Applied preset: {preset_name} ({len(self.zones)} zones)"
             self._auto_save()
+            self._refresh_layout_manager()
             self.queue_draw()
             return True
 
@@ -670,39 +742,51 @@ class ZoneEditorOverlay(Gtk.Window):
         except Exception as e:
             print(f"Auto-save failed: {e}")
 
-    def _show_layout_picker(self):
-        """Show visual dialog to select or create layout"""
-        dialog = Gtk.Dialog(
-            title="Layout Manager",
-            parent=self,
-            modal=True
-        )
-        dialog.set_default_size(400, 350)
+    def _create_layout_manager_window(self):
+        """Create always-visible layout manager window"""
+        if self.layout_manager_window:
+            return  # Already created
 
-        # Content area
-        content = dialog.get_content_area()
-        content.set_spacing(10)
-        content.set_margin_start(15)
-        content.set_margin_end(15)
-        content.set_margin_top(15)
-        content.set_margin_bottom(15)
+        window = Gtk.Window(type=Gtk.WindowType.TOPLEVEL)
+        window.set_title("Layout Manager")
+        window.set_default_size(300, 400)
+        window.set_keep_above(True)
+        window.set_decorated(True)
+        window.set_deletable(False)  # Can't close it
+        window.set_type_hint(Gdk.WindowTypeHint.UTILITY)  # Make it a utility window
+        window.set_skip_taskbar_hint(True)  # Don't show in taskbar
+
+        # Position in top-right corner
+        screen = window.get_screen()
+        screen_width = screen.get_width()
+        window.move(screen_width - 320, 20)
+
+        self.layout_manager_window = window
+
+        # Main container
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        vbox.set_margin_start(15)
+        vbox.set_margin_end(15)
+        vbox.set_margin_top(15)
+        vbox.set_margin_bottom(15)
+        window.add(vbox)
 
         # Header label
-        header = Gtk.Label()
-        header.set_markup(f"<b>Current Layout: {self.current_layout_name}</b>")
-        header.set_halign(Gtk.Align.START)
-        content.pack_start(header, False, False, 0)
+        self.layout_header = Gtk.Label()
+        self.layout_header.set_markup(f"<b>Current: {self.current_layout_name} ({len(self.zones)} zones)</b>")
+        self.layout_header.set_halign(Gtk.Align.START)
+        vbox.pack_start(self.layout_header, False, False, 0)
 
         # Scrollable list of layouts
         scrolled = Gtk.ScrolledWindow()
         scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scrolled.set_vexpand(True)
-        content.pack_start(scrolled, True, True, 0)
+        vbox.pack_start(scrolled, True, True, 0)
 
         # List box for layouts
-        listbox = Gtk.ListBox()
-        listbox.set_selection_mode(Gtk.SelectionMode.SINGLE)
-        listbox.set_activate_on_single_click(False)  # Only activate on double-click
+        self.layout_listbox = Gtk.ListBox()
+        self.layout_listbox.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        self.layout_listbox.set_activate_on_single_click(False)  # Only activate on double-click
 
         # Connect double-click handler
         def on_row_activated(listbox, row):
@@ -711,11 +795,45 @@ class ZoneEditorOverlay(Gtk.Window):
                 self.current_layout_name = row.layout_name
                 self._load_current_layout()
                 self.selected_zone = None
+                self._refresh_layout_manager()
                 self.queue_draw()
-                dialog.response(Gtk.ResponseType.CLOSE)
 
-        listbox.connect("row-activated", on_row_activated)
-        scrolled.add(listbox)
+        self.layout_listbox.connect("row-activated", on_row_activated)
+        scrolled.add(self.layout_listbox)
+
+        # Populate layouts initially
+        self._refresh_layout_list()
+
+        # Buttons at the bottom
+        button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
+        button_box.set_homogeneous(True)
+        vbox.pack_start(button_box, False, False, 0)
+
+        # Create New button
+        create_btn = Gtk.Button(label="Create New")
+        create_btn.connect("clicked", lambda btn: self._on_create_layout())
+        button_box.pack_start(create_btn, True, True, 0)
+
+        # Delete button
+        delete_btn = Gtk.Button(label="Delete")
+        delete_btn.connect("clicked", lambda btn: self._on_delete_layout())
+        button_box.pack_start(delete_btn, True, True, 0)
+
+        # Close button (exits entire editor)
+        close_btn = Gtk.Button(label="Close Editor")
+        close_btn.connect("clicked", lambda btn: Gtk.main_quit())
+        vbox.pack_start(close_btn, False, False, 5)
+
+        window.show_all()
+
+    def _refresh_layout_list(self):
+        """Refresh the layout list in the manager window"""
+        if not self.layout_manager_window or not hasattr(self, 'layout_listbox'):
+            return
+
+        # Clear existing rows
+        for child in self.layout_listbox.get_children():
+            self.layout_listbox.remove(child)
 
         # Populate layouts
         layouts = self.layout_library.list_layouts()
@@ -746,137 +864,131 @@ class ZoneEditorOverlay(Gtk.Window):
                 hbox.pack_start(count_label, False, False, 0)
 
             row.add(hbox)
-            listbox.add(row)
+            self.layout_listbox.add(row)
 
             # Select current layout
             if layout_name == self.current_layout_name:
-                listbox.select_row(row)
+                self.layout_listbox.select_row(row)
 
-        # Buttons
-        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
-        dialog.add_button("Delete Selected", Gtk.ResponseType.REJECT)
-        dialog.add_button("Load Selected", Gtk.ResponseType.OK)
-        dialog.add_button("Create New", Gtk.ResponseType.APPLY)
+        self.layout_listbox.show_all()
 
-        dialog.show_all()
+    def _refresh_layout_manager(self):
+        """Update layout manager window to reflect current state"""
+        if hasattr(self, 'layout_header'):
+            self.layout_header.set_markup(f"<b>Current: {self.current_layout_name} ({len(self.zones)} zones)</b>")
+        self._refresh_layout_list()
 
-        # Handle response
-        response = dialog.run()
+    def _on_create_layout(self):
+        """Handle Create New layout button"""
+        # Prompt for new layout name
+        name_dialog = Gtk.MessageDialog(
+            transient_for=self.layout_manager_window,
+            modal=True,
+            message_type=Gtk.MessageType.QUESTION,
+            buttons=Gtk.ButtonsType.OK_CANCEL,
+            text="Create New Layout"
+        )
+        name_dialog.format_secondary_text("Enter a name for the new layout:")
 
-        if response == Gtk.ResponseType.OK:
-            # Load selected layout
-            selected_row = listbox.get_selected_row()
-            if selected_row and hasattr(selected_row, 'layout_name'):
-                self.current_layout_name = selected_row.layout_name
-                self._load_current_layout()
-                self.selected_zone = None
+        # Add text entry to dialog
+        content_area = name_dialog.get_content_area()
+        entry = Gtk.Entry()
+
+        # Suggest default name
+        base_name = "layout"
+        counter = 1
+        default_name = base_name
+        existing_layouts = self.layout_library.list_layouts()
+        while default_name in existing_layouts:
+            default_name = f"{base_name}{counter}"
+            counter += 1
+
+        entry.set_text(default_name)
+        entry.set_activates_default(True)
+        content_area.pack_start(entry, False, False, 5)
+        name_dialog.show_all()
+
+        name_response = name_dialog.run()
+        new_name = entry.get_text().strip()
+        name_dialog.destroy()
+
+        if name_response == Gtk.ResponseType.OK and new_name:
+            # Sanitize name
+            safe_name = "".join(c for c in new_name if c.isalnum() or c in (' ', '-', '_')).strip()
+
+            if safe_name:
+                # Check if name already exists
+                if safe_name in self.layout_library.list_layouts():
+                    error_dialog = Gtk.MessageDialog(
+                        transient_for=self.layout_manager_window,
+                        modal=True,
+                        message_type=Gtk.MessageType.ERROR,
+                        buttons=Gtk.ButtonsType.OK,
+                        text="Layout already exists"
+                    )
+                    error_dialog.format_secondary_text(f"A layout named '{safe_name}' already exists. Please choose a different name.")
+                    error_dialog.run()
+                    error_dialog.destroy()
+                else:
+                    self.current_layout_name = safe_name
+                    # Clear zones for new layout
+                    self.zones.clear()
+                    self.selected_zone = None
+                    self.status_message = f"Created new layout: {safe_name}"
+                    # Save the empty layout immediately
+                    self._auto_save()
+                    self._refresh_layout_manager()
+                    self.queue_draw()
+            else:
+                self.status_message = "Invalid layout name"
                 self.queue_draw()
 
-        elif response == Gtk.ResponseType.APPLY:
-            # Prompt for new layout name
-            name_dialog = Gtk.MessageDialog(
-                transient_for=dialog,
+    def _on_delete_layout(self):
+        """Handle Delete layout button"""
+        selected_row = self.layout_listbox.get_selected_row()
+        if selected_row and hasattr(selected_row, 'layout_name'):
+            layout_to_delete = selected_row.layout_name
+
+            # Confirm deletion
+            confirm_dialog = Gtk.MessageDialog(
+                transient_for=self.layout_manager_window,
                 modal=True,
                 message_type=Gtk.MessageType.QUESTION,
-                buttons=Gtk.ButtonsType.OK_CANCEL,
-                text="Create New Layout"
+                buttons=Gtk.ButtonsType.YES_NO,
+                text=f"Delete layout '{layout_to_delete}'?"
             )
-            name_dialog.format_secondary_text("Enter a name for the new layout:")
+            confirm_dialog.format_secondary_text("This action cannot be undone.")
 
-            # Add text entry to dialog
-            content_area = name_dialog.get_content_area()
-            entry = Gtk.Entry()
+            confirm_response = confirm_dialog.run()
+            confirm_dialog.destroy()
 
-            # Suggest default name
-            base_name = "layout"
-            counter = 1
-            default_name = base_name
-            existing_layouts = self.layout_library.list_layouts()
-            while default_name in existing_layouts:
-                default_name = f"{base_name}{counter}"
-                counter += 1
+            if confirm_response == Gtk.ResponseType.YES:
+                # Delete the layout
+                if self.layout_library.delete_layout(layout_to_delete):
+                    self.status_message = f"Deleted layout: {layout_to_delete}"
 
-            entry.set_text(default_name)
-            entry.set_activates_default(True)
-            content_area.pack_start(entry, False, False, 5)
-            name_dialog.show_all()
+                    # If we deleted the current layout, switch to another or create new
+                    if layout_to_delete == self.current_layout_name:
+                        remaining = self.layout_library.list_layouts()
+                        if remaining:
+                            self.current_layout_name = remaining[0]
+                            self._load_current_layout()
+                        else:
+                            # No layouts left, create default
+                            self.current_layout_name = "default"
+                            self.zones.clear()
 
-            name_response = name_dialog.run()
-            new_name = entry.get_text().strip()
-            name_dialog.destroy()
-
-            if name_response == Gtk.ResponseType.OK and new_name:
-                # Sanitize name
-                safe_name = "".join(c for c in new_name if c.isalnum() or c in (' ', '-', '_')).strip()
-
-                if safe_name:
-                    # Check if name already exists
-                    if safe_name in self.layout_library.list_layouts():
-                        error_dialog = Gtk.MessageDialog(
-                            transient_for=dialog,
-                            modal=True,
-                            message_type=Gtk.MessageType.ERROR,
-                            buttons=Gtk.ButtonsType.OK,
-                            text="Layout already exists"
-                        )
-                        error_dialog.format_secondary_text(f"A layout named '{safe_name}' already exists. Please choose a different name.")
-                        error_dialog.run()
-                        error_dialog.destroy()
-                    else:
-                        self.current_layout_name = safe_name
-                        # Clear zones for new layout
-                        self.zones.clear()
-                        self.selected_zone = None
-                        self.status_message = f"Created new layout: {safe_name}"
-                        # Save the empty layout immediately
-                        self._auto_save()
-                        self.queue_draw()
+                    self.selected_zone = None
+                    self._refresh_layout_manager()
+                    self.queue_draw()
                 else:
-                    self.status_message = "Invalid layout name"
+                    self.status_message = f"Failed to delete layout: {layout_to_delete}"
                     self.queue_draw()
 
-        elif response == Gtk.ResponseType.REJECT:
-            # Delete selected layout
-            selected_row = listbox.get_selected_row()
-            if selected_row and hasattr(selected_row, 'layout_name'):
-                layout_to_delete = selected_row.layout_name
+    def _show_layout_picker(self):
+        """Legacy method - now just refreshes the always-visible layout manager"""
+        self._refresh_layout_manager()
 
-                # Confirm deletion
-                confirm_dialog = Gtk.MessageDialog(
-                    transient_for=dialog,
-                    modal=True,
-                    message_type=Gtk.MessageType.QUESTION,
-                    buttons=Gtk.ButtonsType.YES_NO,
-                    text=f"Delete layout '{layout_to_delete}'?"
-                )
-                confirm_dialog.format_secondary_text("This action cannot be undone.")
-
-                confirm_response = confirm_dialog.run()
-                confirm_dialog.destroy()
-
-                if confirm_response == Gtk.ResponseType.YES:
-                    # Delete the layout
-                    if self.layout_library.delete_layout(layout_to_delete):
-                        self.status_message = f"Deleted layout: {layout_to_delete}"
-
-                        # If we deleted the current layout, switch to another or create new
-                        if layout_to_delete == self.current_layout_name:
-                            remaining = self.layout_library.list_layouts()
-                            if remaining:
-                                self.current_layout_name = remaining[0]
-                                self._load_current_layout()
-                            else:
-                                # No layouts left, create default
-                                self.current_layout_name = "default"
-                                self.zones.clear()
-
-                        self.selected_zone = None
-                        self.queue_draw()
-                    else:
-                        self.status_message = f"Failed to delete layout: {layout_to_delete}"
-                        self.queue_draw()
-
-        dialog.destroy()
 
 
 def main():
