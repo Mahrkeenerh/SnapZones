@@ -19,9 +19,14 @@ Controls:
 - H: Toggle help
 - D: Toggle dimension display
 - S: Save zones
-- L: Layout manager (switch/create/delete layouts)
 - N: New (clear all)
 - 1-4: Apply presets (1=halves, 2=thirds, 3=quarters, 4=grid3x3)
+
+Layout Manager (always visible):
+- Single-click: Select layout
+- Double-click: Load layout
+- Slow-click or F2: Rename layout
+- Buttons: Create New, Rename, Delete, Close Editor
 """
 
 import gi
@@ -81,6 +86,10 @@ class ZoneEditorOverlay(Gtk.Window):
 
         # Layout manager window (always visible)
         self.layout_manager_window = None
+
+        # For slow click rename detection in layout manager
+        self.layout_last_click_time = 0
+        self.layout_last_click_row = None
 
         # Setup window
         self._setup_window()
@@ -361,13 +370,16 @@ class ZoneEditorOverlay(Gtk.Window):
             "  H       - Toggle this help",
             "  D       - Toggle dimension display",
             "  S       - Save zones",
-            "  L       - Layout manager",
             "  N       - New (clear all)",
             "  Delete  - Delete selected zone",
             "",
             "Presets:",
             "  1  - Halves     2  - Thirds",
             "  3  - Quarters   4  - Grid 3x3",
+            "",
+            "Layout Manager (always visible):",
+            "  Double-click layout to load",
+            "  Slow-click or F2 to rename",
             "",
             "Press H to close help"
         ]
@@ -544,11 +556,6 @@ class ZoneEditorOverlay(Gtk.Window):
         # S - Save
         if keyname in ('s', 'S'):
             self._save_zones()
-            return True
-
-        # L - Layout picker (visual menu)
-        if keyname in ('l', 'L'):
-            self._show_layout_picker()
             return True
 
         # N - New (clear all)
@@ -756,10 +763,8 @@ class ZoneEditorOverlay(Gtk.Window):
         window.set_type_hint(Gdk.WindowTypeHint.UTILITY)  # Make it a utility window
         window.set_skip_taskbar_hint(True)  # Don't show in taskbar
 
-        # Position in top-right corner
-        screen = window.get_screen()
-        screen_width = screen.get_width()
-        window.move(screen_width - 320, 20)
+        # Position in center of screen
+        window.set_position(Gtk.WindowPosition.CENTER)
 
         self.layout_manager_window = window
 
@@ -799,6 +804,13 @@ class ZoneEditorOverlay(Gtk.Window):
                 self.queue_draw()
 
         self.layout_listbox.connect("row-activated", on_row_activated)
+
+        # Connect button press for slow click rename
+        self.layout_listbox.connect("button-press-event", self._on_layout_button_press)
+
+        # Connect key press for F2 rename
+        window.connect("key-press-event", self._on_layout_manager_key_press)
+
         scrolled.add(self.layout_listbox)
 
         # Populate layouts initially
@@ -813,6 +825,11 @@ class ZoneEditorOverlay(Gtk.Window):
         create_btn = Gtk.Button(label="Create New")
         create_btn.connect("clicked", lambda btn: self._on_create_layout())
         button_box.pack_start(create_btn, True, True, 0)
+
+        # Rename button
+        rename_btn = Gtk.Button(label="Rename")
+        rename_btn.connect("clicked", lambda btn: self._on_rename_layout())
+        button_box.pack_start(rename_btn, True, True, 0)
 
         # Delete button
         delete_btn = Gtk.Button(label="Delete")
@@ -988,6 +1005,117 @@ class ZoneEditorOverlay(Gtk.Window):
     def _show_layout_picker(self):
         """Legacy method - now just refreshes the always-visible layout manager"""
         self._refresh_layout_manager()
+
+    def _on_layout_button_press(self, widget, event):
+        """Handle button press on layout listbox for slow click rename"""
+        import time
+
+        # Get the row at the clicked position
+        row = self.layout_listbox.get_row_at_y(int(event.y))
+
+        if not row or not hasattr(row, 'layout_name'):
+            return False
+
+        current_time = time.time()
+
+        # Check if this is a slow click (click on already selected row after 0.5s)
+        if (row == self.layout_last_click_row and
+            row == self.layout_listbox.get_selected_row() and
+            current_time - self.layout_last_click_time > 0.5 and
+            current_time - self.layout_last_click_time < 3.0):
+            # Trigger rename
+            self._start_rename_layout(row.layout_name)
+            return True
+
+        self.layout_last_click_time = current_time
+        self.layout_last_click_row = row
+        return False
+
+    def _on_layout_manager_key_press(self, widget, event):
+        """Handle keyboard shortcuts in layout manager window"""
+        keyval = event.keyval
+        keyname = Gdk.keyval_name(keyval)
+
+        # F2 to rename selected layout
+        if keyname == 'F2':
+            selected_row = self.layout_listbox.get_selected_row()
+            if selected_row and hasattr(selected_row, 'layout_name'):
+                self._start_rename_layout(selected_row.layout_name)
+                return True
+
+        return False
+
+    def _on_rename_layout(self):
+        """Handle Rename button click"""
+        selected_row = self.layout_listbox.get_selected_row()
+        if selected_row and hasattr(selected_row, 'layout_name'):
+            self._start_rename_layout(selected_row.layout_name)
+
+    def _start_rename_layout(self, layout_name: str):
+        """Show rename dialog for a layout"""
+        dialog = Gtk.MessageDialog(
+            transient_for=self.layout_manager_window,
+            modal=True,
+            message_type=Gtk.MessageType.QUESTION,
+            buttons=Gtk.ButtonsType.OK_CANCEL,
+            text="Rename Layout"
+        )
+        dialog.format_secondary_text(f"Enter new name for '{layout_name}':")
+
+        # Add text entry to dialog
+        content_area = dialog.get_content_area()
+        entry = Gtk.Entry()
+        entry.set_text(layout_name)
+        entry.set_activates_default(True)
+        entry.select_region(0, -1)  # Select all text
+        content_area.pack_start(entry, False, False, 5)
+        dialog.show_all()
+
+        response = dialog.run()
+        new_name = entry.get_text().strip()
+        dialog.destroy()
+
+        if response == Gtk.ResponseType.OK and new_name and new_name != layout_name:
+            # Sanitize the new name
+            safe_name = "".join(c for c in new_name if c.isalnum() or c in (' ', '-', '_')).strip()
+
+            if safe_name:
+                # Perform rename
+                if self.layout_library.rename_layout(layout_name, safe_name):
+                    self.status_message = f"Renamed layout: {layout_name} → {safe_name}"
+
+                    # Update current layout name if we renamed the current one
+                    if self.current_layout_name == layout_name:
+                        self.current_layout_name = safe_name
+
+                    self._refresh_layout_manager()
+                    self.queue_draw()
+                else:
+                    # Show error
+                    error_dialog = Gtk.MessageDialog(
+                        transient_for=self.layout_manager_window,
+                        modal=True,
+                        message_type=Gtk.MessageType.ERROR,
+                        buttons=Gtk.ButtonsType.OK,
+                        text="Failed to rename layout"
+                    )
+                    error_dialog.format_secondary_text(
+                        f"Could not rename '{layout_name}' to '{safe_name}'. "
+                        f"The new name may already exist or be invalid."
+                    )
+                    error_dialog.run()
+                    error_dialog.destroy()
+            else:
+                error_dialog = Gtk.MessageDialog(
+                    transient_for=self.layout_manager_window,
+                    modal=True,
+                    message_type=Gtk.MessageType.ERROR,
+                    buttons=Gtk.ButtonsType.OK,
+                    text="Invalid layout name"
+                )
+                error_dialog.format_secondary_text("Please enter a valid name containing only letters, numbers, spaces, hyphens, and underscores.")
+                error_dialog.run()
+                error_dialog.destroy()
 
 
 

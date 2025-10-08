@@ -156,6 +156,67 @@ class LayoutLibrary:
             print(f"Error loading layout '{name}': {e}")
             return None
 
+    def rename_layout(self, old_name: str, new_name: str) -> bool:
+        """
+        Rename a layout
+
+        Args:
+            old_name: Current layout name
+            new_name: New layout name
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Check if old layout exists
+            if not self.layout_exists(old_name):
+                print(f"Layout '{old_name}' does not exist")
+                return False
+
+            # Check if new name already exists
+            if self.layout_exists(new_name):
+                print(f"Layout '{new_name}' already exists")
+                return False
+
+            # Load the layout
+            layout = self.load_layout(old_name)
+            if not layout:
+                return False
+
+            # Update the layout name
+            layout.name = new_name
+            layout.modified_date = datetime.now().isoformat()
+
+            # Save with new name
+            new_filepath = self._get_layout_filepath(new_name)
+            with open(new_filepath, 'w') as f:
+                json.dump(layout.to_dict(), f, indent=2)
+
+            # Delete old file
+            old_filepath = self._get_layout_filepath(old_name)
+            if os.path.exists(old_filepath):
+                os.remove(old_filepath)
+
+            # Update cache
+            if old_name in self._layouts_cache:
+                del self._layouts_cache[old_name]
+            self._layouts_cache[new_name] = layout
+
+            # Update workspace mappings
+            workspaces_to_update = [ws for ws, layout_name in self._workspace_mappings.items()
+                                   if layout_name == old_name]
+            for ws in workspaces_to_update:
+                self._workspace_mappings[ws] = new_name
+
+            if workspaces_to_update:
+                self._save_workspace_mappings()
+
+            return True
+
+        except Exception as e:
+            print(f"Error renaming layout '{old_name}' to '{new_name}': {e}")
+            return False
+
     def delete_layout(self, name: str) -> bool:
         """
         Delete a layout

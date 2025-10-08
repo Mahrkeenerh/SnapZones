@@ -29,10 +29,11 @@ Linux window management tool inspired by Windows PowerToys FancyZones.
 - Preset layouts (halves, thirds, quarters, 3x3 grid)
 - WYSIWYG zone editor with drag, resize, delete operations
 - 8-handle resize system (corners + edges)
-- **Global layout library system** (v0.6.0)
+- **Global layout library system** (v0.6.0+)
   - Multiple named layouts stored globally
   - Workspace-to-layout mappings
-  - Always-visible layout manager window
+  - Center-positioned layout manager window (integrated into zone editor)
+  - Layout rename with three methods: button, slow-click, F2 key (v0.6.2)
   - Auto-save on all zone modifications
   - Deep copy to prevent layout cross-contamination
 - **Zone dimension display** (v0.6.1 - Phase 3.3)
@@ -44,7 +45,7 @@ Linux window management tool inspired by Windows PowerToys FancyZones.
 
 ---
 
-## Current Implementation (v0.6.1)
+## Current Implementation (v0.6.2)
 
 ### File Structure
 ```
@@ -55,9 +56,8 @@ src/snap_zones/
 ├── input_monitor.py       # Mouse/keyboard tracking, hotkeys
 ├── overlay.py             # Transparent zone overlay
 ├── snapper.py             # Core snapping orchestration
-├── zone_editor.py         # Fullscreen zone editor with layout manager
-├── layout_library.py      # Global layout library management
-└── layout_selector.py     # GTK layout selector dialog
+├── zone_editor.py         # Fullscreen zone editor with integrated layout manager
+└── layout_library.py      # Global layout library management
 ```
 
 ### Configuration Files
@@ -94,9 +94,6 @@ python -m snap_zones.layout_library --create LAYOUT_NAME
 python -m snap_zones.layout_library --delete LAYOUT_NAME
 python -m snap_zones.layout_library --set-workspace WORKSPACE_ID LAYOUT_NAME
 python -m snap_zones.layout_library --list-workspaces
-
-# Layout selector dialog
-python -m snap_zones.layout_selector --workspace WORKSPACE_ID
 ```
 
 ### Keyboard Controls
@@ -110,11 +107,14 @@ python -m snap_zones.layout_selector --workspace WORKSPACE_ID
 - `H`: Toggle help
 - `D`: Toggle dimension display (position + size overlays)
 - `S`: Save zones (manual save)
-- `L`: Always-visible layout manager window (create/switch/delete layouts)
+- **Layout Manager** (center-positioned window, always visible)
   - Auto-updates zone count on modifications
   - Single-click: Select layout
   - Double-click: Load layout
-  - "Create New": Dialog prompts for name
+  - Slow-click (click selected item again): Rename layout
+  - `F2`: Rename selected layout
+  - "Create New": Create new layout with name dialog
+  - "Rename": Rename selected layout with dialog
   - "Delete": Delete selected layout with confirmation
   - "Close Editor": Exit entire editor
 - `N`: Clear all zones (auto-saves)
@@ -167,3 +167,9 @@ See `IMPLEMENTATION_PLAN_V2.md` for detailed plan.
   - Layout selector dialog for workspace assignment
   - Auto-save functionality
   - Deep copy fix for layout isolation
+- **v0.6.2** (2025-10-08) - Layout Rename & UI Improvements
+  - Added layout rename functionality to layout manager
+  - Three rename methods: Rename button, slow-click, and F2 key
+  - Removed duplicate layout selector dialog (consolidated into zone editor)
+  - Repositioned layout manager window from top-right to center
+  - Layout rename updates all workspace mappings automatically
