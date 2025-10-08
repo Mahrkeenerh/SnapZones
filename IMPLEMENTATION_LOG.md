@@ -32,14 +32,19 @@ Linux window management tool inspired by Windows PowerToys FancyZones.
 - **Global layout library system** (v0.6.0)
   - Multiple named layouts stored globally
   - Workspace-to-layout mappings
-  - Visual layout manager dialog
+  - Always-visible layout manager window
   - Auto-save on all zone modifications
   - Deep copy to prevent layout cross-contamination
+- **Zone dimension display** (v0.6.1 - Phase 3.3)
+  - Position (X: Y:) overlay in top-left corner
+  - Size (W × H) overlay in bottom-right corner
+  - CaptiX-inspired styling with semi-transparent backgrounds
+  - Enabled by default, toggle with 'D' key
 - Zone persistence in JSON format
 
 ---
 
-## Current Implementation (v0.6.0)
+## Current Implementation (v0.6.1)
 
 ### File Structure
 ```
@@ -103,12 +108,15 @@ python -m snap_zones.layout_selector --workspace WORKSPACE_ID
 - Drag handles: Resize zone (auto-saves)
 - `ESC`: Exit editor
 - `H`: Toggle help
+- `D`: Toggle dimension display (position + size overlays)
 - `S`: Save zones (manual save)
-- `L`: Layout manager (create/switch/delete layouts)
+- `L`: Always-visible layout manager window (create/switch/delete layouts)
+  - Auto-updates zone count on modifications
   - Single-click: Select layout
   - Double-click: Load layout
   - "Create New": Dialog prompts for name
-  - "Delete Selected": Delete with confirmation
+  - "Delete": Delete selected layout with confirmation
+  - "Close Editor": Exit entire editor
 - `N`: Clear all zones (auto-saves)
 - `Delete`: Delete selected zone (auto-saves)
 - `1-4`: Apply presets (halves/thirds/quarters/grid) (auto-saves)

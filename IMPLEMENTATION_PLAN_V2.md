@@ -48,12 +48,14 @@
 
 **Implementation**:
 - Register hotkeys: Super+Arrow keys (or configurable modifier+arrows)
-- Sort all zones by top-left corner position (x, then y for ties)
-- Arrow key logic:
-  - **Right**: Find next zone in sorted list (wraps to first)
-  - **Left**: Find previous zone in sorted list (wraps to last)
-  - **Down**: Find zone with larger Y coordinate (wraps to top)
-  - **Up**: Find zone with smaller Y coordinate (wraps to bottom)
+- Two zone orderings for different navigation axes:
+  - **Horizontal (Left/Right)**: Sort zones by (x, then y)
+  - **Vertical (Up/Down)**: Sort zones by (y, then x)
+- Arrow key logic (all cycle with wrapping):
+  - **Right**: Next zone in horizontal order
+  - **Left**: Previous zone in horizontal order
+  - **Down**: Next zone in vertical order
+  - **Up**: Previous zone in vertical order
 - Snap window immediately to selected zone (no preview/highlight)
 - Simple, predictable cycling behavior
 
@@ -176,14 +178,18 @@
 
 ### Zone Ordering Algorithm
 ```python
-# Sort zones by top-left corner (x, then y)
-sorted_zones = sorted(zones, key=lambda z: (z.x, z.y))
+# Sort zones by top-left corner
+# For horizontal navigation (LEFT/RIGHT): sort by (x, then y)
+horizontal_zones = sorted(zones, key=lambda z: (z.x, z.y))
 
-# Arrow key actions:
-# RIGHT: current_index = (current_index + 1) % len(zones)
-# LEFT:  current_index = (current_index - 1) % len(zones)
-# DOWN:  Find first zone where z.y > current_zone.y (wrap to min y)
-# UP:    Find first zone where z.y < current_zone.y (wrap to max y)
+# For vertical navigation (UP/DOWN): sort by (y, then x)
+vertical_zones = sorted(zones, key=lambda z: (z.y, z.x))
+
+# Arrow key actions (all cycle with wrapping):
+# RIGHT: current_index = (current_index + 1) % len(horizontal_zones)
+# LEFT:  current_index = (current_index - 1) % len(horizontal_zones)
+# DOWN:  current_index = (current_index + 1) % len(vertical_zones)
+# UP:    current_index = (current_index - 1) % len(vertical_zones)
 ```
 
 ### No Visual Feedback
