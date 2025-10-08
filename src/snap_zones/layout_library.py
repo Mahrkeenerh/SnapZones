@@ -124,18 +124,20 @@ class LayoutLibrary:
             print(f"Error saving layout '{layout.name}': {e}")
             return False
 
-    def load_layout(self, name: str) -> Optional[Layout]:
+    def load_layout(self, name: str, force_reload: bool = True) -> Optional[Layout]:
         """
         Load layout by name
 
         Args:
             name: Layout name
+            force_reload: Always reload from disk (default: True to avoid stale cache)
 
         Returns:
             Layout object or None if not found
         """
-        # Check cache first
-        if name in self._layouts_cache:
+        # Always reload from disk by default to avoid stale cache
+        # (zone editor runs in separate process, so cache can be outdated)
+        if not force_reload and name in self._layouts_cache:
             return self._layouts_cache[name]
 
         try:
