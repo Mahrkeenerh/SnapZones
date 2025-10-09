@@ -1,4 +1,0 @@
-#!/bin/bash
-source "/home/samo/Data/Programs/SnapZones/venv/bin/activate"
-export PYTHONPATH="/home/samo/Data/Programs/SnapZones/src:$PYTHONPATH"
-exec python3 -m snap_zones.daemon "$@"
