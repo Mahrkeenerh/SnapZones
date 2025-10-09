@@ -47,8 +47,8 @@ class ZoneEditorOverlay(Gtk.Window):
     # Visual constants
     ZONE_FILL_COLOR = (0.3, 0.5, 0.8, 0.3)  # Blue with transparency
     ZONE_BORDER_COLOR = (0.2, 0.4, 0.7, 0.8)
-    SELECTED_FILL_COLOR = (0.8, 0.5, 0.3, 0.4)  # Orange with transparency
-    SELECTED_BORDER_COLOR = (0.7, 0.4, 0.2, 1.0)
+    SELECTED_FILL_COLOR = (1.0, 0.5, 0.0, 0.4)  # Orange with transparency for selected
+    SELECTED_BORDER_COLOR = (1.0, 0.5, 0.0, 1.0)
     HANDLE_SIZE = 10
     HANDLE_COLOR = (1.0, 1.0, 1.0, 0.9)
     HANDLE_BORDER_COLOR = (0.0, 0.0, 0.0, 1.0)

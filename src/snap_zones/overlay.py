@@ -115,26 +115,23 @@ class OverlayWindow(Gtk.Window):
         is_highlighted = zone == self.highlighted_zone
         is_selected = zone == self.selected_zone
 
-        # CaptiX-style alpha values (lower, more subtle)
+        # Draw filled rectangle with orange for highlighted/selected, zone color for inactive
         if is_selected:
-            alpha = 0.4
+            ctx.set_source_rgba(1.0, 0.5, 0.0, 0.4)  # Orange fill for selected
         elif is_highlighted:
-            alpha = 0.3
+            ctx.set_source_rgba(1.0, 0.5, 0.0, 0.3)  # Orange fill for highlighted
         else:
-            alpha = 0.15
-
-        # Draw filled rectangle
-        ctx.set_source_rgba(color[0], color[1], color[2], alpha)
+            ctx.set_source_rgba(color[0], color[1], color[2], 0.15)  # Zone color for inactive
         ctx.rectangle(x, y, w, h)
         ctx.fill()
 
-        # Draw border with CaptiX-style dashed pattern
-        # CaptiX uses blue (0, 150, 255) with ~200 alpha -> (0, 0.588, 1.0, 0.784)
+        # Draw border with dashed pattern
+        # Orange for highlighted/selected, blue for inactive
         if is_selected:
-            ctx.set_source_rgba(0, 0.588, 1.0, 0.9)  # Brighter blue for selected
+            ctx.set_source_rgba(1.0, 0.5, 0.0, 0.9)  # Brighter orange for selected
             ctx.set_line_width(3)
         elif is_highlighted:
-            ctx.set_source_rgba(0, 0.588, 1.0, 0.784)  # CaptiX blue
+            ctx.set_source_rgba(1.0, 0.5, 0.0, 0.784)  # Orange for highlighted
             ctx.set_line_width(2)
         else:
             ctx.set_source_rgba(0, 0.588, 1.0, 0.5)  # Dimmer blue for inactive
