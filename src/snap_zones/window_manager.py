@@ -389,28 +389,12 @@ class WindowManager:
                     # Only one window with this PID, use it
                     return candidates[0]['id']
                 elif len(candidates) > 1:
-                    # Multiple windows with same PID, need to check title
-                    # We need to query Details for each candidate to get the title
-                    for candidate in candidates:
-                        details_result = subprocess.run([
-                            'gdbus', 'call', '--session',
-                            '--dest', 'org.gnome.Shell',
-                            '--object-path', '/org/gnome/Shell/Extensions/Windows',
-                            '--method', 'org.gnome.Shell.Extensions.Windows.Details',
-                            str(candidate['id'])
-                        ],
-                        capture_output=True,
-                        text=True,
-                        timeout=1.0
-                        )
-
-                        if details_result.returncode == 0:
-                            details_output = details_result.stdout.strip()
-                            if details_output.startswith("('") and details_output.endswith("',)"):
-                                details_json = details_output[2:-3]
-                                details = json.loads(details_json)
-                                if details.get('title') == x11_title:
-                                    return candidate['id']
+                    # Multiple windows with same PID - can't reliably identify which one
+                    # This commonly happens with terminals (gnome-terminal-server)
+                    # Fall back to X11 to ensure we move the correct window
+                    print(f"Multiple windows found with PID {x11_pid} - falling back to X11 for reliable identification",
+                          file=sys.stderr)
+                    return None
 
             return None
 
