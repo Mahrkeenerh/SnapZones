@@ -4,225 +4,196 @@
   <img src="assets/logo.png" alt="SnapZones Logo" width="400"/>
 </p>
 
-Linux window management tool inspired by Windows PowerToys FancyZones. Snap windows to predefined zones using keyboard modifiers and visual overlays.
+**Powerful window management for Linux** - Snap windows to predefined zones using keyboard modifiers and visual overlays. Inspired by Windows PowerToys FancyZones.
 
 ## Features
 
-- **Zone-based window snapping**: Hold modifier key + drag window to snap to zones
-- **Visual zone editor**: Fullscreen WYSIWYG editor for creating custom layouts
-- **Multiple layouts**: Global layout library with workspace-specific mappings
-- **Preset layouts**: Halves, thirds, quarters, and 3x3 grid
-- **Keyboard shortcuts**: Quick access to editor and snapping functionality
+- 🎯 **Zone-based window snapping** - Hold Alt + drag to snap windows to custom zones
+- 🎨 **Visual zone editor** - Create and edit layouts with live preview on your desktop
+- 📐 **Preset layouts** - Quick layouts: halves, thirds, quarters, and 3x3 grid
+- 🗂️ **Multiple layouts** - Different layouts for different workspaces
+- 📦 **Snap app support** - Works with snap-confined apps like Slack (with Window Calls extension)
+- ⚡ **Fast & lightweight** - Minimal resource usage, runs silently in background
 
 ## System Requirements
 
-- **Linux with X11** (Wayland not supported due to window manipulation limitations)
+- **Linux with X11** (Wayland not currently supported)
 - **Python 3.10+**
-- **X11 display server** (required - set DISPLAY environment variable)
-
-## Dependencies
-
-### System Packages (Ubuntu/Debian)
-
-```bash
-sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0 \
-                 libcairo2-dev python3-xlib libx11-dev python3-dev
-```
-
-### Python Packages
-
-```bash
-pip install -r requirements.txt
-```
-
-Required packages:
-- `python-xlib>=0.33` - X11 window management
-- `pynput>=1.7.6` - Global keyboard/mouse monitoring
-- `PyGObject>=3.42,<3.50` - GTK3 bindings
-- `pycairo>=1.20.0` - Cairo graphics
+- **GNOME Desktop Environment** (for keyboard shortcuts)
 
 ## Installation
 
 ### Quick Install
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/yourusername/SnapZones.git
 cd SnapZones
 ./install.sh
 ```
 
-For non-interactive installation (useful in scripts):
-```bash
-./install.sh -y
-```
-
 The installer will:
-- Check and install system dependencies (with your permission)
-- Set up Python virtual environment
-- Install SnapZones scripts to `~/.local/bin/`
-- Register native GNOME keyboard shortcut (Super+Shift+Tab)
-- Configure autostart on login
-- Start the daemon immediately
+- ✅ Install required system packages (with your permission)
+- ✅ Set up Python virtual environment
+- ✅ Install SnapZones to `~/.local/bin/`
+- ✅ Configure keyboard shortcut (Super+Shift+Tab)
+- ✅ Set up autostart on login
+- ✅ Start the daemon
 
-### Manual Installation
+That's it! SnapZones is ready to use.
 
+### Optional: Snap Application Support
+
+If you use snap-confined applications (like Slack, Discord, Spotify) and want to snap them to zones, install the Window Calls GNOME extension:
+
+**Option 1: From GNOME Extensions (recommended)**
+1. Visit https://extensions.gnome.org/extension/4724/window-calls/
+2. Click "Install"
+3. Restart SnapZones: `snapzones-status restart`
+
+**Option 2: From source**
 ```bash
-# Install system dependencies
-sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0 \
-                 libcairo2-dev python3-xlib libx11-dev python3-dev
-
-# Create virtual environment and install Python packages
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-
-# Run manually
-python -m snap_zones.daemon          # Start daemon
-python -m snap_zones.zone_editor     # Open editor
+git clone https://github.com/ickyicky/window-calls.git /tmp/window-calls
+cd /tmp/window-calls
+make install
+gnome-extensions enable window-calls@domandoman.xyz
+snapzones-status restart
 ```
 
-### Uninstallation
-
-```bash
-./uninstall.sh
-```
-
-For non-interactive uninstallation:
-```bash
-./uninstall.sh -y
-```
-
-Optionally removes configuration and layouts.
+**Why?** Snap-confined apps have security restrictions that prevent direct window manipulation. Window Calls provides a safe interface for SnapZones to move these windows. Regular (non-snap) applications work perfectly without it.
 
 ## Usage
 
-### Default Shortcuts
+### Quick Start
 
-- **Alt + Drag Window**: Show zone overlay and snap to zone
-- **Super + Shift + Tab**: Open zone editor (native GNOME keyboard shortcut)
+1. **Press Alt + Drag a window** - Zone overlay appears
+2. **Drag to a zone** - Zone highlights
+3. **Release mouse** - Window snaps to zone
+
+That's it! No clicking, no extra keys.
+
+### Opening the Zone Editor
+
+Press **Super + Shift + Tab** to open the zone editor
 
 ### Zone Editor Controls
 
-- **Click & Drag**: Draw new zone
-- **Click on zone**: Select zone
-- **Drag selected**: Move zone
-- **Drag handles**: Resize zone (8 resize handles: corners + edges)
-- **ESC**: Exit editor
-- **H**: Toggle help panel
-- **D**: Toggle dimension display (position and size overlays)
-- **S**: Save zones manually (auto-saves on all modifications)
-- **N**: Create new layout
-- **Delete**: Delete selected zone
-- **1-4**: Apply presets (1=halves, 2=thirds, 3=quarters, 4=grid)
+**Creating Zones:**
+- **Click & Drag** empty space to draw a new zone
 
-### Layout Manager
+**Editing Zones:**
+- **Click zone** to select it
+- **Drag zone** to move it
+- **Drag handles** to resize (8 handles: corners + edges)
+- **Delete** key to remove selected zone
 
-The layout manager window is always visible when the zone editor is open:
+**Quick Actions:**
+- **1, 2, 3, 4** - Apply preset layouts (halves, thirds, quarters, grid)
+- **H** - Show/hide help
+- **D** - Toggle dimension labels
+- **ESC** - Exit editor
 
-- **Single-click**: Select layout
-- **Double-click**: Load layout for editing (automatically maps current workspace to this layout)
-- **Slow-click or F2**: Rename selected layout
-- **Buttons**: Create New, Rename, Delete, Close Editor
+**Layout Manager:**
+- **Double-click layout** - Switch to that layout for current workspace
+- **Create New** button - Create a new layout
+- **F2** or slow-click - Rename layout
+- **Delete** button - Delete selected layout
 
-**Auto-Workspace Mapping**: When you double-click a layout or create a new layout, SnapZones automatically maps your current workspace to that layout. The daemon will then show that layout's zones when you Alt+Drag windows on that workspace.
+### Managing Layouts
+
+SnapZones automatically maps layouts to workspaces. When you double-click a layout or create a new one, it's assigned to your current workspace.
+
+**Example workflow:**
+1. Switch to workspace 1
+2. Open zone editor (Super+Shift+Tab)
+3. Double-click "Coding" layout
+4. Zone editor shows "Coding" zones
+5. Exit editor - workspace 1 now uses "Coding" layout
+6. Alt+Drag windows - they snap to "Coding" zones
+
+## Managing SnapZones
+
+### Check Status
+```bash
+snapzones-status
+```
+
+### Restart Daemon
+```bash
+snapzones-status restart
+```
+
+Restart is needed after:
+- Installing/updating Window Calls extension
+- Configuration changes
+- Troubleshooting issues
+
+### Stop Daemon
+```bash
+snapzones-status stop
+```
+
+### View Logs
+```bash
+snapzones-status logs
+```
+
+### Uninstall
+```bash
+cd SnapZones
+./uninstall.sh
+```
 
 ## Configuration
 
-Configuration files stored in `~/.config/snapzones/`:
+Configuration files are stored in `~/.config/snapzones/`:
 
-- `layouts/*.json` - Named layout files
-- `workspace_layouts.json` - Workspace-to-layout mappings (auto-updated by editor)
-- `daemon.pid` - Daemon process ID
+- `layouts/` - Your custom zone layouts
+- `workspace_layouts.json` - Workspace-to-layout mappings
+- `daemon.pid` - Daemon process ID (managed automatically)
 
-### Workspace-Layout Mapping
+**Note:** Zones are automatically constrained to your usable screen area, excluding panels and docks. Windows won't be placed under your top panel.
 
-SnapZones automatically maps workspaces to layouts when you:
-- **Double-click a layout** in the Layout Manager
-- **Create a new layout** with the "Create New" button
+## Troubleshooting
 
-The mapping is saved to `workspace_layouts.json`. You can also manually edit this file if needed:
-```json
-{
-  "0": "default",
-  "1": "coding",
-  "2": "design"
-}
-```
+### Snap apps won't move
+Install the Window Calls extension (see installation section above). SnapZones will automatically detect and use it.
 
-The daemon automatically reloads the mappings, so changes take effect immediately without restarting.
-
-**Native Shortcuts**: SnapZones uses GNOME's native keyboard shortcut system (`gsettings`) rather than capturing all keyboard events. This ensures proper integration with your desktop environment.
-
-## Current Status
-
-**Version**: 0.6.2
-
-**Completed**:
-- ✅ Core window management (X11)
-- ✅ Global input monitoring
-- ✅ Zone overlay system
-- ✅ Modifier+drag snapping workflow (Alt+Drag)
-- ✅ Fullscreen zone editor with WYSIWYG editing
-- ✅ Global layout library system
-- ✅ Workspace-to-layout mapping
-- ✅ Layout rename functionality
-- ✅ Zone dimension display
-- ✅ Auto-save on modifications
-- ✅ Background daemon with PID locking
-- ✅ Native GNOME keyboard shortcut integration (Super+Shift+Tab)
-- ✅ Autostart on login
-- ✅ Installation and uninstallation scripts
-- ✅ Status management utility
-- ✅ Auto-map workspace to layout when switching layouts in editor
-
-**Planned Features**:
-
-### Keyboard Navigation
-- **Arrow key zone movement**: Super+Arrow keys to move windows between zones
-  - Horizontal ordering (Left/Right): Sort zones by (x, then y)
-  - Vertical ordering (Up/Down): Sort zones by (y, then x)
-  - Cycle through zones with wrapping
-
-### System Integration & Polish
-- **System tray indicator**: AppIndicator3 with menu for quick access
-- **Settings dialog**: Configure keyboard shortcuts, modifier keys, behavior settings
-- **Multi-zone proximity snapping**: Snap to combined area when near multiple zones
-- **Magnetic edge snapping in editor**: Toggle to snap zone edges to other zones
-- **Deployment packaging**: Create setup.py and distribution packages
-
-## Development
-
-### Project Structure
-
-```
-src/snap_zones/
-├── window_manager.py    # X11 window operations
-├── zone.py              # Zone data structures, presets
-├── input_monitor.py     # Mouse/keyboard tracking, hotkeys
-├── overlay.py           # Transparent zone overlay
-├── snapper.py           # Core snapping orchestration
-├── zone_editor.py       # Fullscreen zone editor
-└── layout_library.py    # Global layout management
-```
-
-### Running Tests
-
+### Keyboard shortcut doesn't work
+Check if Super+Shift+Tab is already used by another application:
 ```bash
-# Test window management
-python -m snap_zones.window_manager --list
-
-# Test input monitoring
-python -m snap_zones.input_monitor --test-hotkeys
-
-# Test overlay
-python -m snap_zones.overlay --show --preset grid3x3
-
-# Interactive snapping
-python -m snap_zones.snapper --interactive --modifier alt
-
-# Zone editor
-python -m snap_zones.zone_editor
+gsettings get org.gnome.desktop.wm.keybindings switch-group-backward
 ```
+
+### Daemon not starting
+Check logs for error messages:
+```bash
+snapzones-status logs
+```
+
+### Zone editor won't open
+Make sure the daemon is running:
+```bash
+snapzones-status
+```
+
+If stopped, restart it:
+```bash
+snapzones-status restart
+```
+
+## How It Works
+
+SnapZones works by:
+1. **Monitoring** Alt key state and mouse movements
+2. **Detecting** when you start dragging a window
+3. **Showing** a transparent overlay with your zones
+4. **Snapping** the window when you release it over a zone
+
+**Smart Detection:**
+- Uses X11 for window management
+- Window Calls extension for snap-confined apps (optional)
+- Automatically falls back to X11 if Window Calls isn't available
+- Respects panel and dock areas
 
 ## License
 
@@ -231,3 +202,7 @@ python -m snap_zones.zone_editor
 ## Credits
 
 Inspired by Microsoft PowerToys FancyZones.
+
+Built with Python, GTK3, Cairo, and python-xlib.
+
+Optional integration with [Window Calls](https://github.com/ickyicky/window-calls) GNOME extension.

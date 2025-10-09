@@ -67,6 +67,9 @@ class ZoneEditorOverlay(Gtk.Window):
         import Xlib.display
         self.x_display = Xlib.display.Display()
 
+        # Get work area (usable screen space excluding panels/docks)
+        self.workarea_margins = self._get_workarea_margins()
+
         # Will be set after workspace detection
         self.current_layout_name: Optional[str] = initial_layout
         self.current_file: Optional[str] = None
@@ -138,6 +141,58 @@ class ZoneEditorOverlay(Gtk.Window):
             Gdk.EventMask.POINTER_MOTION_MASK |
             Gdk.EventMask.KEY_PRESS_MASK
         )
+
+    def _get_workarea_margins(self) -> Tuple[int, int, int, int]:
+        """
+        Get work area margins (reserved space for panels/docks).
+
+        Returns:
+            Tuple of (left, top, right, bottom) margins in pixels
+        """
+        try:
+            root = self.x_display.screen().root
+            screen_width = self.x_display.screen().width_in_pixels
+            screen_height = self.x_display.screen().height_in_pixels
+
+            # Get _NET_WORKAREA property
+            net_workarea = self.x_display.intern_atom('_NET_WORKAREA')
+            workarea_prop = root.get_full_property(net_workarea, 0)
+
+            if workarea_prop and len(workarea_prop.value) >= 4:
+                # _NET_WORKAREA: x, y, width, height (for first desktop)
+                wa_x, wa_y, wa_width, wa_height = workarea_prop.value[:4]
+
+                # Calculate margins
+                left = wa_x
+                top = wa_y
+                right = screen_width - (wa_x + wa_width)
+                bottom = screen_height - (wa_y + wa_height)
+
+                return (left, top, right, bottom)
+        except Exception as e:
+            print(f"Error getting work area margins: {e}")
+
+        # Default: no margins
+        return (0, 0, 0, 0)
+
+    def _constrain_to_workarea(self, x: int, y: int, screen_width: int, screen_height: int) -> Tuple[int, int]:
+        """
+        Constrain coordinates to the usable work area (excluding panels/docks).
+
+        Args:
+            x, y: Input coordinates in pixels
+            screen_width, screen_height: Total screen dimensions
+
+        Returns:
+            Constrained (x, y) coordinates
+        """
+        left, top, right, bottom = self.workarea_margins
+
+        # Clamp coordinates to work area
+        x = max(left, min(x, screen_width - right))
+        y = max(top, min(y, screen_height - bottom))
+
+        return (x, y)
 
     def get_current_workspace(self) -> int:
         """Get the current workspace number from X11"""
@@ -476,6 +531,10 @@ class ZoneEditorOverlay(Gtk.Window):
             x1, y1 = self.draw_start
             x2, y2 = self.draw_current
 
+            # Clamp coordinates to work area
+            x1, y1 = self._constrain_to_workarea(x1, y1, alloc.width, alloc.height)
+            x2, y2 = self._constrain_to_workarea(x2, y2, alloc.width, alloc.height)
+
             # Create zone if it has reasonable size
             if abs(x2 - x1) > 30 and abs(y2 - y1) > 30:
                 # Convert to relative coordinates
@@ -554,8 +613,17 @@ class ZoneEditorOverlay(Gtk.Window):
             dy = (y - self.move_start[1]) / alloc.height
 
             orig_x, orig_y, orig_w, orig_h = self.zone_original_rect
-            new_x = max(0, min(1 - orig_w, orig_x + dx))
-            new_y = max(0, min(1 - orig_h, orig_y + dy))
+
+            # Calculate work area bounds in relative coordinates
+            left, top, right, bottom = self.workarea_margins
+            min_x = left / alloc.width
+            min_y = top / alloc.height
+            max_x = (alloc.width - right) / alloc.width
+            max_y = (alloc.height - bottom) / alloc.height
+
+            # Clamp to work area bounds
+            new_x = max(min_x, min(max_x - orig_w, orig_x + dx))
+            new_y = max(min_y, min(max_y - orig_h, orig_y + dy))
 
             self.selected_zone.x = new_x
             self.selected_zone.y = new_y
@@ -638,14 +706,23 @@ class ZoneEditorOverlay(Gtk.Window):
             screen = self.get_screen()
             screen_width = screen.get_width()
             screen_height = screen.get_height()
-            # Create preset layout with absolute coordinates
-            absolute_zones = create_preset_layout(preset_name, screen_width, screen_height)
-            # Convert to relative coordinates (0.0-1.0)
+
+            # Calculate work area (usable space)
+            left, top, right, bottom = self.workarea_margins
+            workarea_x = left
+            workarea_y = top
+            workarea_width = screen_width - left - right
+            workarea_height = screen_height - top - bottom
+
+            # Create preset layout with work area dimensions
+            absolute_zones = create_preset_layout(preset_name, workarea_width, workarea_height)
+
+            # Convert to relative coordinates (0.0-1.0) with work area offset
             self.zones = []
             for zone in absolute_zones:
                 rel_zone = Zone(
-                    x=zone.x / screen_width,
-                    y=zone.y / screen_height,
+                    x=(zone.x + workarea_x) / screen_width,
+                    y=(zone.y + workarea_y) / screen_height,
                     width=zone.width / screen_width,
                     height=zone.height / screen_height,
                     name=zone.name,
@@ -697,10 +774,18 @@ class ZoneEditorOverlay(Gtk.Window):
                 new_y = orig_y + orig_h - min_size
             new_h = min_size
 
-        new_x = max(0, min(1 - new_w, new_x))
-        new_y = max(0, min(1 - new_h, new_y))
-        new_w = min(1 - new_x, new_w)
-        new_h = min(1 - new_y, new_h)
+        # Calculate work area bounds in relative coordinates
+        left, top, right, bottom = self.workarea_margins
+        min_x = left / canvas_width
+        min_y = top / canvas_height
+        max_x = (canvas_width - right) / canvas_width
+        max_y = (canvas_height - bottom) / canvas_height
+
+        # Clamp to work area bounds
+        new_x = max(min_x, min(max_x - new_w, new_x))
+        new_y = max(min_y, min(max_y - new_h, new_y))
+        new_w = min(max_x - new_x, new_w)
+        new_h = min(max_y - new_y, new_h)
 
         self.selected_zone.x = new_x
         self.selected_zone.y = new_y

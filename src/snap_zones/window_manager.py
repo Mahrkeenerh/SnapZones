@@ -33,6 +33,14 @@ class WindowManager:
             print(f"Error connecting to X11 display: {e}", file=sys.stderr)
             raise
 
+        # Detect Window Calls extension (once at startup)
+        self.has_window_calls = self._detect_window_calls_extension()
+
+        if self.has_window_calls:
+            print("Window Calls extension detected - using for all window operations")
+        else:
+            print("Window Calls extension not found - using X11 protocol")
+
     def get_window_title(self, window) -> str:
         """Get the title of a window"""
         try:
@@ -230,8 +238,35 @@ class WindowManager:
             print(f"Error getting window at position: {e}", file=sys.stderr)
             return None
 
-    def move_resize_window(self, window_id: int, x: int, y: int, width: int, height: int) -> bool:
-        """Move and resize a window to the specified geometry"""
+    def move_resize_window(self, window_id: int, x: int, y: int,
+                           width: int, height: int) -> bool:
+        """
+        Move and resize window.
+
+        Uses Window Calls extension if available, otherwise falls back to X11.
+        Detection happens once at startup, not per-call.
+
+        Args:
+            window_id: Window ID
+            x, y: Target position
+            width, height: Target size
+
+        Returns:
+            True if successful
+        """
+
+        # Use Window Calls if available (detected at startup)
+        if self.has_window_calls:
+            return self._move_resize_via_window_calls(window_id, x, y, width, height)
+
+        # Otherwise use existing X11 implementation
+        return self._move_resize_via_x11(window_id, x, y, width, height)
+
+    def _move_resize_via_x11(self, window_id: int, x: int, y: int, width: int, height: int) -> bool:
+        """
+        Move and resize window using X11 protocol.
+        This is the original implementation, now used as fallback.
+        """
         try:
             window = self.display.create_resource_object('window', window_id)
 
@@ -281,6 +316,188 @@ class WindowManager:
         except Exception as e:
             print(f"Error moving/resizing window: {e}", file=sys.stderr)
             return False
+
+    def _get_window_calls_id(self, x11_window_id: int) -> Optional[int]:
+        """
+        Map X11 window ID to Window Calls window ID.
+
+        Uses PID and window title to match windows between the two systems.
+        Handles frame windows by checking their children for properties.
+
+        Args:
+            x11_window_id: X11 window ID
+
+        Returns:
+            Window Calls window ID if found, None otherwise
+        """
+        import subprocess
+        import json
+
+        try:
+            # Get X11 window info
+            window = self.display.create_resource_object('window', x11_window_id)
+
+            # Get PID from X11 window
+            net_wm_pid = self.display.get_atom('_NET_WM_PID')
+            pid_prop = window.get_full_property(net_wm_pid, X.AnyPropertyType)
+
+            # If no PID on parent, check first child (common for frame windows)
+            if not pid_prop:
+                try:
+                    tree = window.query_tree()
+                    if tree.children and len(tree.children) > 0:
+                        child_window = tree.children[0]
+                        pid_prop = child_window.get_full_property(net_wm_pid, X.AnyPropertyType)
+                        if pid_prop:
+                            # Use child window for getting properties
+                            window = child_window
+                except Exception:
+                    pass
+
+            if not pid_prop:
+                return None
+            x11_pid = pid_prop.value[0]
+
+            # Get title from X11 window
+            x11_title = self.get_window_title(window)
+
+            # Get Window Calls window list
+            result = subprocess.run([
+                'gdbus', 'call', '--session',
+                '--dest', 'org.gnome.Shell',
+                '--object-path', '/org/gnome/Shell/Extensions/Windows',
+                '--method', 'org.gnome.Shell.Extensions.Windows.List'
+            ],
+            capture_output=True,
+            text=True,
+            timeout=1.0
+            )
+
+            if result.returncode != 0:
+                return None
+
+            # Parse Window Calls output - it's a tuple with JSON string: ('...',)
+            output = result.stdout.strip()
+            if output.startswith("('") and output.endswith("',)"):
+                json_str = output[2:-3]  # Remove ("' and "',)
+                windows = json.loads(json_str)
+
+                # First try to match by PID only (for efficiency)
+                candidates = [w for w in windows if w.get('pid') == x11_pid]
+
+                if len(candidates) == 1:
+                    # Only one window with this PID, use it
+                    return candidates[0]['id']
+                elif len(candidates) > 1:
+                    # Multiple windows with same PID, need to check title
+                    # We need to query Details for each candidate to get the title
+                    for candidate in candidates:
+                        details_result = subprocess.run([
+                            'gdbus', 'call', '--session',
+                            '--dest', 'org.gnome.Shell',
+                            '--object-path', '/org/gnome/Shell/Extensions/Windows',
+                            '--method', 'org.gnome.Shell.Extensions.Windows.Details',
+                            str(candidate['id'])
+                        ],
+                        capture_output=True,
+                        text=True,
+                        timeout=1.0
+                        )
+
+                        if details_result.returncode == 0:
+                            details_output = details_result.stdout.strip()
+                            if details_output.startswith("('") and details_output.endswith("',)"):
+                                details_json = details_output[2:-3]
+                                details = json.loads(details_json)
+                                if details.get('title') == x11_title:
+                                    return candidate['id']
+
+            return None
+
+        except Exception as e:
+            print(f"Error mapping window ID: {e}", file=sys.stderr)
+            return None
+
+    def _detect_window_calls_extension(self) -> bool:
+        """
+        Detect if Window Calls GNOME extension is available.
+        Called once at startup.
+
+        Returns:
+            True if extension is available and responding
+        """
+        try:
+            import subprocess
+
+            result = subprocess.run([
+                'gdbus', 'call', '--session',
+                '--dest', 'org.gnome.Shell',
+                '--object-path', '/org/gnome/Shell/Extensions/Windows',
+                '--method', 'org.gnome.Shell.Extensions.Windows.List'
+            ],
+            capture_output=True,
+            timeout=1.0  # Quick timeout - should respond immediately
+            )
+
+            return result.returncode == 0
+
+        except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
+            return False
+
+    def _move_resize_via_window_calls(self, window_id: int, x: int, y: int,
+                                       width: int, height: int) -> bool:
+        """
+        Move and resize window using Window Calls GNOME extension.
+        Falls back to X11 if Window Calls mapping or execution fails.
+
+        Args:
+            window_id: X11 window ID (as integer)
+            x, y: Target position
+            width, height: Target size
+
+        Returns:
+            True if successful, False otherwise
+        """
+        import subprocess
+
+        try:
+            # Map X11 window ID to Window Calls ID
+            wc_window_id = self._get_window_calls_id(window_id)
+            if wc_window_id is None:
+                print(f"Could not map X11 window {window_id:#x} to Window Calls ID, falling back to X11",
+                      file=sys.stderr)
+                return self._move_resize_via_x11(window_id, x, y, width, height)
+
+            # Call Window Calls MoveResize
+            result = subprocess.run([
+                'gdbus', 'call', '--session',
+                '--dest', 'org.gnome.Shell',
+                '--object-path', '/org/gnome/Shell/Extensions/Windows',
+                '--method', 'org.gnome.Shell.Extensions.Windows.MoveResize',
+                str(wc_window_id),  # Window Calls window ID
+                str(x),             # X position
+                str(y),             # Y position
+                str(width),         # Width
+                str(height)         # Height
+            ],
+            capture_output=True,
+            timeout=2.0
+            )
+
+            if result.returncode == 0:
+                return True
+            else:
+                # Window Calls failed, fall back to X11
+                print(f"Window Calls failed: {result.stderr.decode('utf-8', errors='replace')}, falling back to X11",
+                      file=sys.stderr)
+                return self._move_resize_via_x11(window_id, x, y, width, height)
+
+        except subprocess.TimeoutExpired:
+            print(f"Window Calls timeout for window {window_id:#x}, falling back to X11", file=sys.stderr)
+            return self._move_resize_via_x11(window_id, x, y, width, height)
+        except Exception as e:
+            print(f"Window Calls error: {e}, falling back to X11", file=sys.stderr)
+            return self._move_resize_via_x11(window_id, x, y, width, height)
 
     def _get_frame_extents(self, window) -> tuple[int, int, int, int]:
         """
