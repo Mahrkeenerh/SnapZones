@@ -4,15 +4,19 @@
   <img src="assets/logo.png" alt="SnapZones Logo" width="400"/>
 </p>
 
-**Powerful window management for Linux** - Snap windows to predefined zones using keyboard modifiers and visual overlays. Inspired by Windows PowerToys FancyZones.
+**Window management for Linux** - Snap windows to predefined zones using keyboard modifiers and visual overlays. Inspired by Windows PowerToys FancyZones.
+
+## ⚠️ Disclaimer
+
+This entire application was vibe-coded with Claude. I take no responsibility for it breaking your system. I developed it for myself, I use it regularly, and I applied best practices while developing it with Claude and tested it thoroughly. It works for me - your mileage may vary. Use at your own risk.
 
 ## Features
 
 - 🎯 **Zone-based window snapping** - Hold Alt + drag to snap windows to custom zones
+- 🔀 **Overlapping zones support** - Not limited to grids - zones can overlap and be positioned freely
 - 🎨 **Visual zone editor** - Create and edit layouts with live preview on your desktop
 - 📐 **Preset layouts** - Quick layouts: halves, thirds, quarters, and 3x3 grid
 - 🗂️ **Multiple layouts** - Different layouts for different workspaces
-- 📦 **Snap app support** - Works with snap-confined apps like Slack (with Window Calls extension)
 - ⚡ **Fast & lightweight** - Minimal resource usage, runs silently in background
 
 ## System Requirements
@@ -23,16 +27,35 @@
 
 ## Installation
 
+### System Packages
+
+First, install the required system packages:
+
+```bash
+sudo apt install python3 python3-pip python3-venv python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-wnck-3.0 python3-xlib
+```
+
+### Optional: Snap Application Support
+
+If you use snap-confined applications (like Slack, Discord, Spotify) and want to snap them to zones, install the Window Calls GNOME extension **before installing SnapZones**:
+
+1. Visit https://extensions.gnome.org/extension/4724/window-calls/
+2. Click "Install"
+
+If you install Window Calls after installing SnapZones, run:
+```bash
+snapzones-status restart
+```
+
 ### Quick Install
 
 ```bash
-git clone https://github.com/yourusername/SnapZones.git
+git clone https://github.com/Mahrkeenerh/SnapZones.git
 cd SnapZones
 ./install.sh
 ```
 
 The installer will:
-- ✅ Install required system packages (with your permission)
 - ✅ Set up Python virtual environment
 - ✅ Install SnapZones to `~/.local/bin/`
 - ✅ Configure keyboard shortcut (Super+Shift+Tab)
@@ -40,26 +63,6 @@ The installer will:
 - ✅ Start the daemon
 
 That's it! SnapZones is ready to use.
-
-### Optional: Snap Application Support
-
-If you use snap-confined applications (like Slack, Discord, Spotify) and want to snap them to zones, install the Window Calls GNOME extension:
-
-**Option 1: From GNOME Extensions (recommended)**
-1. Visit https://extensions.gnome.org/extension/4724/window-calls/
-2. Click "Install"
-3. Restart SnapZones: `snapzones-status restart`
-
-**Option 2: From source**
-```bash
-git clone https://github.com/ickyicky/window-calls.git /tmp/window-calls
-cd /tmp/window-calls
-make install
-gnome-extensions enable window-calls@domandoman.xyz
-snapzones-status restart
-```
-
-**Why?** Snap-confined apps have security restrictions that prevent direct window manipulation. Window Calls provides a safe interface for SnapZones to move these windows. Regular (non-snap) applications work perfectly without it.
 
 ## Usage
 
@@ -77,38 +80,17 @@ Press **Super + Shift + Tab** to open the zone editor
 
 ### Zone Editor Controls
 
+- **H** - Show/hide help
+
 **Creating Zones:**
 - **Click & Drag** empty space to draw a new zone
 
-**Editing Zones:**
-- **Click zone** to select it
-- **Drag zone** to move it
-- **Drag handles** to resize (8 handles: corners + edges)
-- **Delete** key to remove selected zone
+## Planned Features
 
-**Quick Actions:**
-- **1, 2, 3, 4** - Apply preset layouts (halves, thirds, quarters, grid)
-- **H** - Show/hide help
-- **D** - Toggle dimension labels
-- **ESC** - Exit editor
-
-**Layout Manager:**
-- **Double-click layout** - Switch to that layout for current workspace
-- **Create New** button - Create a new layout
-- **F2** or slow-click - Rename layout
-- **Delete** button - Delete selected layout
-
-### Managing Layouts
-
-SnapZones automatically maps layouts to workspaces. When you double-click a layout or create a new one, it's assigned to your current workspace.
-
-**Example workflow:**
-1. Switch to workspace 1
-2. Open zone editor (Super+Shift+Tab)
-3. Double-click "Coding" layout
-4. Zone editor shows "Coding" zones
-5. Exit editor - workspace 1 now uses "Coding" layout
-6. Alt+Drag windows - they snap to "Coding" zones
+- 🖱️ **System tray icon** - Quick access to settings and controls
+- ⚙️ **Settings and configurations** - Customizable behavior and preferences
+- 🧲 **Multi-zone proximity snapping** - Combined area detection when zones are close together
+- 📏 **Magnetic edge snapping in editor** - Toggle-able snap-to-grid for precise zone alignment
 
 ## Managing SnapZones
 
@@ -181,23 +163,9 @@ If stopped, restart it:
 snapzones-status restart
 ```
 
-## How It Works
-
-SnapZones works by:
-1. **Monitoring** Alt key state and mouse movements
-2. **Detecting** when you start dragging a window
-3. **Showing** a transparent overlay with your zones
-4. **Snapping** the window when you release it over a zone
-
-**Smart Detection:**
-- Uses X11 for window management
-- Window Calls extension for snap-confined apps (optional)
-- Automatically falls back to X11 if Window Calls isn't available
-- Respects panel and dock areas
-
 ## License
 
-[To be determined]
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Credits
 
