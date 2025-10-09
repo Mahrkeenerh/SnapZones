@@ -1,14 +1,4 @@
-#!/usr/bin/env python3
-"""SnapZones Zone Editor Entry Point"""
-
-import sys
-import os
-
-# Add src directory to path
-src_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src')
-sys.path.insert(0, src_dir)
-
-from snap_zones.zone_editor import main
-
-if __name__ == '__main__':
-    main()
+#!/bin/bash
+source "/home/samo/Data/Programs/SnapZones/venv/bin/activate"
+export PYTHONPATH="/home/samo/Data/Programs/SnapZones/src:$PYTHONPATH"
+exec python3 -m snap_zones.zone_editor "$@"

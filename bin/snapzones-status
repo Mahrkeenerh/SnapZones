@@ -51,14 +51,18 @@ case "${1:-status}" in
         $0 stop
         sleep 1
         echo "Starting daemon..."
-        snapzones &
+        nohup snapzones > "$LOG_FILE" 2>&1 &
         sleep 1
         $0 status
         ;;
 
     logs)
         if [ -f "$LOG_FILE" ]; then
-            tail -f "$LOG_FILE"
+            if [ "${2}" = "-f" ] || [ "${2}" = "--follow" ]; then
+                tail -f "$LOG_FILE"
+            else
+                tail -n 50 "$LOG_FILE"
+            fi
         else
             echo "No log file found at $LOG_FILE"
             exit 1
@@ -72,7 +76,8 @@ case "${1:-status}" in
         echo "  status   - Check if daemon is running"
         echo "  stop     - Stop the daemon"
         echo "  restart  - Restart the daemon"
-        echo "  logs     - View daemon logs (tail -f)"
+        echo "  logs     - View last 50 lines of daemon logs"
+        echo "  logs -f  - Follow daemon logs in real-time"
         exit 1
         ;;
 esac
