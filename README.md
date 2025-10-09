@@ -25,6 +25,11 @@ This entire application was vibe-coded with Claude. I take no responsibility for
 - **Python 3.10+**
 - **GNOME Desktop Environment** (for keyboard shortcuts)
 
+**Verify your system:**
+```bash
+echo "X11: $XDG_SESSION_TYPE" && gnome-shell --version 2>/dev/null
+```
+
 ## Installation
 
 ### System Packages
