@@ -90,6 +90,10 @@ Press **Super + Shift + Tab** to open the zone editor
 **Creating Zones:**
 - **Click & Drag** empty space to draw a new zone
 
+**Precise Movement (1px accuracy):**
+- **Arrow Keys** - Move selected zone by 1 pixel
+- **Alt + Arrow Keys** - Resize selected zone by 1 pixel
+
 ## Planned Features
 
 - 🖱️ **System tray icon** - Quick access to settings and controls

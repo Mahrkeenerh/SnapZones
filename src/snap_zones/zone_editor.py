@@ -14,6 +14,8 @@ Controls:
 - Click on zone: Select zone
 - Drag selected zone: Move it
 - Drag resize handles: Resize zone
+- Arrow keys: Move selected zone (1px precision)
+- Alt + Arrow keys: Resize selected zone (1px precision)
 - Delete key: Delete selected zone
 - Escape: Exit editor
 - H: Toggle help
@@ -416,7 +418,7 @@ class ZoneEditorOverlay(Gtk.Window):
     def _draw_help(self, cr: cairo.Context, width: int, height: int):
         """Draw help panel"""
         panel_width = 380
-        panel_height = 500
+        panel_height = 580
         panel_x = (width - panel_width) // 2
         panel_y = (height - panel_height) // 2
 
@@ -444,6 +446,10 @@ class ZoneEditorOverlay(Gtk.Window):
             "  Click on zone      - Select zone",
             "  Drag selected      - Move zone",
             "  Drag handles       - Resize zone",
+            "",
+            "Precise Movement (1px):",
+            "  Arrow Keys         - Move selected zone",
+            "  Alt + Arrow Keys   - Resize selected zone",
             "",
             "Keyboard Shortcuts:",
             "  ESC       - Exit editor",
@@ -690,6 +696,103 @@ class ZoneEditorOverlay(Gtk.Window):
             self._auto_save()
             self._refresh_layout_manager()
             self.status_message = f"Deleted {zone_name}"
+            self.queue_draw()
+            return True
+
+        # Arrow keys - Move or resize selected zone with 1px precision
+        if self.selected_zone and keyname in ('Up', 'Down', 'Left', 'Right'):
+            alloc = self.get_allocation()
+            canvas_width = alloc.width
+            canvas_height = alloc.height
+
+            # Check if Alt is pressed for resize mode
+            is_alt = event.state & Gdk.ModifierType.MOD1_MASK
+
+            # Use high precision: convert to pixels and back using exact division
+            # This avoids cumulative rounding errors
+            if is_alt:
+                # Alt + Arrow: Resize by 1px
+                # Get current absolute pixel dimensions and position
+                abs_x = self.selected_zone.x * canvas_width
+                abs_y = self.selected_zone.y * canvas_height
+                abs_w = self.selected_zone.width * canvas_width
+                abs_h = self.selected_zone.height * canvas_height
+
+                orig_abs_w = int(round(abs_w))
+                orig_abs_h = int(round(abs_h))
+
+                if keyname == 'Right':
+                    abs_w += 1
+                elif keyname == 'Left':
+                    abs_w = max(30, abs_w - 1)
+                elif keyname == 'Down':
+                    abs_h += 1
+                elif keyname == 'Up':
+                    abs_h = max(30, abs_h - 1)
+
+                # Ensure zone stays within work area
+                left, top, right, bottom = self.workarea_margins
+                max_width = (canvas_width - right) - abs_x
+                max_height = (canvas_height - bottom) - abs_y
+
+                abs_w = min(max_width, abs_w)
+                abs_h = min(max_height, abs_h)
+
+                # Convert back to relative coordinates with full precision
+                self.selected_zone.width = abs_w / canvas_width
+                self.selected_zone.height = abs_h / canvas_height
+
+                new_abs_w = int(round(abs_w))
+                new_abs_h = int(round(abs_h))
+
+                if new_abs_w != orig_abs_w or new_abs_h != orig_abs_h:
+                    self.status_message = f"Resized {self.selected_zone.name} → {new_abs_w}×{new_abs_h}px"
+                else:
+                    self.status_message = f"{self.selected_zone.name} at boundary (cannot resize)"
+            else:
+                # Arrow: Move by 1px
+                # Get current absolute pixel positions with full precision
+                abs_x = self.selected_zone.x * canvas_width
+                abs_y = self.selected_zone.y * canvas_height
+                abs_w = self.selected_zone.width * canvas_width
+                abs_h = self.selected_zone.height * canvas_height
+
+                orig_abs_x = int(round(abs_x))
+                orig_abs_y = int(round(abs_y))
+
+                if keyname == 'Right':
+                    abs_x += 1
+                elif keyname == 'Left':
+                    abs_x -= 1
+                elif keyname == 'Down':
+                    abs_y += 1
+                elif keyname == 'Up':
+                    abs_y -= 1
+
+                # Calculate work area bounds in absolute pixels
+                left, top, right, bottom = self.workarea_margins
+                min_x = left
+                min_y = top
+                max_x = canvas_width - right - abs_w
+                max_y = canvas_height - bottom - abs_h
+
+                # Clamp to work area
+                abs_x = max(min_x, min(max_x, abs_x))
+                abs_y = max(min_y, min(max_y, abs_y))
+
+                # Convert back to relative coordinates with full precision
+                self.selected_zone.x = abs_x / canvas_width
+                self.selected_zone.y = abs_y / canvas_height
+
+                new_abs_x = int(round(abs_x))
+                new_abs_y = int(round(abs_y))
+
+                if new_abs_x != orig_abs_x or new_abs_y != orig_abs_y:
+                    self.status_message = f"Moved {self.selected_zone.name} → X:{new_abs_x} Y:{new_abs_y}"
+                else:
+                    self.status_message = f"{self.selected_zone.name} at boundary (cannot move)"
+
+            self._auto_save()
             self.queue_draw()
             return True
 
