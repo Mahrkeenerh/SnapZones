@@ -415,8 +415,8 @@ class ZoneEditorOverlay(Gtk.Window):
 
     def _draw_help(self, cr: cairo.Context, width: int, height: int):
         """Draw help panel"""
-        panel_width = 500
-        panel_height = 400
+        panel_width = 380
+        panel_height = 500
         panel_x = (width - panel_width) // 2
         panel_y = (height - panel_height) // 2
 
@@ -446,13 +446,13 @@ class ZoneEditorOverlay(Gtk.Window):
             "  Drag handles       - Resize zone",
             "",
             "Keyboard Shortcuts:",
-            "  ESC     - Exit editor",
-            "  H       - Toggle this help",
-            "  D       - Toggle dimension display",
-            "  S       - Save zones",
-            "  C       - Clear all zones",
-            "  N       - New layout",
-            "  Delete  - Delete selected zone",
+            "  ESC       - Exit editor",
+            "  H         - Toggle this help",
+            "  D         - Toggle dimension display",
+            "  S         - Save zones",
+            "  C         - Clear all zones",
+            "  N         - New layout",
+            "  X/Delete  - Delete selected zone",
             "",
             "Presets:",
             "  1  - Halves     2  - Thirds",
@@ -682,8 +682,8 @@ class ZoneEditorOverlay(Gtk.Window):
             self._on_create_layout()
             return True
 
-        # Delete - Remove selected zone
-        if keyname == 'Delete' and self.selected_zone:
+        # Delete or X - Remove selected zone
+        if keyname in ('Delete', 'x', 'X') and self.selected_zone:
             zone_name = self.selected_zone.name
             self.zones.remove(self.selected_zone)
             self.selected_zone = None
