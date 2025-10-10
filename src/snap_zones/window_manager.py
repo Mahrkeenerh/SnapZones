@@ -90,25 +90,9 @@ class WindowManager:
         except Exception:
             pass
 
-        # Fallback: estimate from window geometry
-        try:
-            geom = window.get_geometry()
-
-            # If window has negative coordinates, it has borders
-            left_border = max(0, -geom.x) if geom.x < 0 else 0
-            top_border = max(0, -geom.y) if geom.y < 0 else 0
-
-            # If left border detected, assume uniform borders (common pattern)
-            if left_border > 0:
-                return (left_border, left_border, left_border, left_border)
-
-            # If only top border, it's likely a title bar
-            if top_border > 0:
-                return (0, 0, top_border, 0)
-
-        except Exception:
-            pass
-
+        # Fallback: No frame extents detected
+        # NOTE: The old fallback code that estimated borders from negative coordinates
+        # is now broken since translate_coords can legitimately return negative coords
         return (0, 0, 0, 0)
 
     def get_window_geometry(self, window) -> Tuple[int, int, int, int]:
@@ -116,7 +100,9 @@ class WindowManager:
         try:
             geom = window.get_geometry()
             # Translate coordinates to root window
-            trans = window.translate_coords(self.root, 0, 0)
+            # CORRECT: root.translate_coords(window, 0, 0) converts window's (0,0) to root coords
+            # WRONG: window.translate_coords(root, 0, 0) converts root's (0,0) to window coords (inverts!)
+            trans = self.root.translate_coords(window, 0, 0)
             return (trans.x, trans.y, geom.width, geom.height)
         except XError:
             return (0, 0, 0, 0)
@@ -270,6 +256,10 @@ class WindowManager:
         try:
             window = self.display.create_resource_object('window', window_id)
 
+            # DEBUG: Log X11 move attempt
+            title = self.get_window_title(window)
+            print(f"[X11] Moving window '{title}' (ID: {window_id:#x}) to ({x}, {y}, {width}, {height})", file=sys.stderr)
+
             # Remove maximized state if present
             self._unmaximize_window(window)
 
@@ -389,11 +379,19 @@ class WindowManager:
                     # Only one window with this PID, use it
                     return candidates[0]['id']
                 elif len(candidates) > 1:
-                    # Multiple windows with same PID - can't reliably identify which one
-                    # This commonly happens with terminals (gnome-terminal-server)
-                    # Fall back to X11 to ensure we move the correct window
-                    print(f"Multiple windows found with PID {x11_pid} - falling back to X11 for reliable identification",
+                    # Multiple windows with same PID
+                    # Use the focused/active window from the candidates
+                    print(f"Multiple windows found with PID {x11_pid} - using focused window",
                           file=sys.stderr)
+
+                    # Try to find the focused window among candidates
+                    focused = [w for w in candidates if w.get('focus') is True]
+                    if len(focused) == 1:
+                        print(f"  Found focused window: id={focused[0]['id']}", file=sys.stderr)
+                        return focused[0]['id']
+
+                    # If no focused window or multiple focused (shouldn't happen), fall back to X11
+                    print(f"  Could not determine focused window - falling back to X11", file=sys.stderr)
                     return None
 
             return None
