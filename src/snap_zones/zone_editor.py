@@ -1250,6 +1250,13 @@ class ZoneEditorOverlay(Gtk.Window):
                             self.current_layout_name = "default"
                             self.zones.clear()
 
+                        # Update current workspace to point to the new layout
+                        workspace_id = self.get_current_workspace()
+                        if self.layout_library.set_active_layout(workspace_id, self.current_layout_name):
+                            print(f"Updated workspace {workspace_id} → layout '{self.current_layout_name}' after deletion")
+                        else:
+                            print(f"Failed to update workspace {workspace_id} mapping after deletion")
+
                     self.selected_zone = None
                     self._refresh_layout_manager()
                     self.queue_draw()
