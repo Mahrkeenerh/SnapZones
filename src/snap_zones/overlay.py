@@ -382,13 +382,12 @@ def main():
 
     # Add parent directory to path to import zone module
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from snap_zones.zone import ZoneManager, create_preset_layout
+    from snap_zones.zone import create_preset_layout
 
     parser = argparse.ArgumentParser(description='SnapZones Overlay Renderer')
     parser.add_argument('--show', action='store_true', help='Show overlay with test zones')
-    parser.add_argument('--load', metavar='FILE', help='Load zones from file')
     parser.add_argument('--preset', choices=['halves', 'thirds', 'quarters', 'grid3x3'],
-                       help='Use preset layout')
+                       help='Use preset layout (default: quarters)')
     parser.add_argument('--screen-width', type=int, default=3440, help='Screen width')
     parser.add_argument('--screen-height', type=int, default=1440, help='Screen height')
     parser.add_argument('--duration', type=int, default=10, help='Duration to show overlay (seconds)')
@@ -399,26 +398,13 @@ def main():
         parser.print_help()
         return
 
-    # Create zone manager
-    zm = ZoneManager()
-
-    # Load zones
-    if args.load:
-        if zm.load_from_file(args.load):
-            print(f"Loaded {len(zm)} zones from {args.load}")
-        else:
-            print(f"Failed to load zones from {args.load}")
-            return
-    elif args.preset:
+    # Create zones from preset
+    if args.preset:
         zones = create_preset_layout(args.preset, args.screen_width, args.screen_height)
-        for zone in zones:
-            zm.add_zone(zone)
         print(f"Created {args.preset} layout with {len(zones)} zones")
     else:
         # Create default test zones (quarters)
         zones = create_preset_layout('quarters', args.screen_width, args.screen_height)
-        for zone in zones:
-            zm.add_zone(zone)
         print(f"Created test layout with {len(zones)} zones")
 
     # Create overlay manager
@@ -440,7 +426,7 @@ def main():
     print(f"Showing overlay for {args.duration} seconds...")
     print("Click on a zone to select it (will hide overlay)")
     print("Press Escape to cancel and hide overlay")
-    overlay_manager.show(list(zm))
+    overlay_manager.show(zones)
 
     # Auto-hide after duration
     def auto_hide():

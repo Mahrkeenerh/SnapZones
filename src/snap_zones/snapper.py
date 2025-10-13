@@ -9,7 +9,7 @@ import threading
 import time
 
 from .window_manager import WindowManager
-from .zone import Zone, ZoneManager
+from .zone import Zone
 from .overlay import OverlayManager
 from .input_monitor import KeyboardTracker, MouseTracker
 from .layout_library import LayoutLibrary
@@ -20,7 +20,6 @@ class WindowSnapper:
 
     def __init__(self, trigger_modifier: str = 'alt'):
         self.window_manager = WindowManager()
-        self.zone_manager = ZoneManager()  # Keep for compatibility
         self.layout_library = LayoutLibrary()
         self.overlay_manager = OverlayManager()
         self.keyboard_tracker = KeyboardTracker()
@@ -415,92 +414,3 @@ class WindowSnapper:
             self.keyboard_tracker.stop()
             self.mouse_tracker.stop()
             self.overlay_manager.destroy()
-
-
-class SnapperCLI:
-    """Command-line interface for the snapper"""
-
-    def __init__(self, trigger_modifier: str = 'alt'):
-        self.snapper = WindowSnapper(trigger_modifier=trigger_modifier)
-
-    def run_interactive(self):
-        """Run interactive snapping workflow"""
-        self.snapper.start_snap_workflow()
-
-    def snap_active_to_preset(self, preset: str, screen_width: int, screen_height: int):
-        """Snap active window to first zone of a preset"""
-        from zone import create_preset_layout
-
-        zones = create_preset_layout(preset, screen_width, screen_height)
-        if not zones:
-            print(f"Failed to create preset: {preset}")
-            return
-
-        # Snap to first zone
-        success = self.snapper.snap_active_window_to_zone(zones[0])
-        if success:
-            print(f"Snapped active window to {zones[0]}")
-        else:
-            print("Failed to snap window")
-
-    def list_workspaces(self):
-        """List all workspaces with zone counts"""
-        import os
-        config_dir = os.path.expanduser("~/.config/snapzones")
-
-        print("Workspaces:")
-        print("-" * 40)
-
-        for i in range(10):  # Check first 10 workspaces
-            zones_file = f"{config_dir}/zones_ws{i}.json"
-            if os.path.exists(zones_file):
-                zm = ZoneManager()
-                if zm.load_from_file(zones_file):
-                    print(f"Workspace {i}: {len(zm)} zones")
-
-        # Check for default zones
-        default_file = f"{config_dir}/zones.json"
-        if os.path.exists(default_file):
-            zm = ZoneManager()
-            if zm.load_from_file(default_file):
-                print(f"Default: {len(zm)} zones")
-
-
-def main():
-    """Command-line interface for testing snapper"""
-    import argparse
-    import sys
-    import os
-
-    # Add parent directory to path
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-    parser = argparse.ArgumentParser(description='SnapZones Window Snapper')
-    parser.add_argument('--interactive', action='store_true',
-                       help='Run interactive snap workflow (modifier+drag to snap)')
-    parser.add_argument('--modifier', choices=['shift', 'ctrl', 'alt', 'super'],
-                       default='alt', help='Modifier key to trigger snapping (default: alt)')
-    parser.add_argument('--snap-active', metavar='PRESET',
-                       choices=['halves', 'thirds', 'quarters', 'grid3x3'],
-                       help='Snap active window to first zone of preset')
-    parser.add_argument('--screen-width', type=int, default=3440, help='Screen width')
-    parser.add_argument('--screen-height', type=int, default=1440, help='Screen height')
-    parser.add_argument('--list-workspaces', action='store_true',
-                       help='List all workspaces with zone counts')
-
-    args = parser.parse_args()
-
-    cli = SnapperCLI(trigger_modifier=args.modifier)
-
-    if args.interactive:
-        cli.run_interactive()
-    elif args.snap_active:
-        cli.snap_active_to_preset(args.snap_active, args.screen_width, args.screen_height)
-    elif args.list_workspaces:
-        cli.list_workspaces()
-    else:
-        parser.print_help()
-
-
-if __name__ == '__main__':
-    main()

@@ -7,7 +7,7 @@ import json
 import os
 from typing import List, Optional, Dict
 from datetime import datetime
-from .zone import Zone, ZoneManager
+from .zone import Zone
 
 
 class Layout:
@@ -392,7 +392,6 @@ def main():
 
     parser = argparse.ArgumentParser(description='SnapZones Layout Library Manager')
     parser.add_argument('--list', action='store_true', help='List all layouts')
-    parser.add_argument('--create', metavar='NAME', help='Create new layout from preset or zones.json')
     parser.add_argument('--delete', metavar='NAME', help='Delete a layout')
     parser.add_argument('--show', metavar='NAME', help='Show layout details')
     parser.add_argument('--set-workspace', nargs=2, metavar=('WORKSPACE', 'LAYOUT'),
@@ -460,15 +459,6 @@ def main():
 
         if not library._workspace_mappings:
             print("  No workspace mappings configured.")
-
-    elif args.create:
-        # Create layout from zones.json if it exists
-        zm = ZoneManager()
-        if zm.load_from_file():
-            library.create_layout(args.create, list(zm.zones), "Custom layout")
-            print(f"Created layout '{args.create}' with {len(zm.zones)} zones")
-        else:
-            print("No zones.json found. Use zone editor to create zones first.")
 
     else:
         parser.print_help()

@@ -501,27 +501,6 @@ class WindowManager:
             print(f"Window Calls error: {e}, falling back to X11", file=sys.stderr)
             return self._move_resize_via_x11(window_id, x, y, width, height)
 
-    def _get_frame_extents(self, window) -> tuple[int, int, int, int]:
-        """
-        Get the frame extents (window decorations) for a window
-
-        Returns:
-            Tuple of (left, right, top, bottom) border widths in pixels
-        """
-        try:
-            net_frame_extents = self.display.get_atom('_NET_FRAME_EXTENTS')
-            extents_prop = window.get_full_property(net_frame_extents, X.AnyPropertyType)
-
-            if extents_prop and len(extents_prop.value) == 4:
-                # Returns [left, right, top, bottom]
-                return tuple(extents_prop.value)
-
-        except Exception:
-            pass
-
-        # Default to no frame if we can't get the property
-        return (0, 0, 0, 0)
-
     def _unmaximize_window(self, window):
         """Remove maximized state from a window"""
         try:

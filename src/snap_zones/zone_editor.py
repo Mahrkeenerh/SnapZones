@@ -39,7 +39,7 @@ import cairo
 import json
 import os
 from typing import List, Optional, Tuple
-from .zone import Zone, ZoneManager, create_preset_layout
+from .zone import Zone, create_preset_layout
 from .layout_library import LayoutLibrary, Layout
 
 
@@ -62,7 +62,6 @@ class ZoneEditorOverlay(Gtk.Window):
     def __init__(self, initial_layout: Optional[str] = None):
         super().__init__()
 
-        self.zone_manager = ZoneManager()
         self.layout_library = LayoutLibrary()
 
         # X11 display for workspace detection
@@ -1379,24 +1378,7 @@ class ZoneEditorOverlay(Gtk.Window):
 
 def main():
     """Run zone editor overlay"""
-    import argparse
-
-    parser = argparse.ArgumentParser(description="SnapZones Zone Editor - Fullscreen Overlay")
-    parser.add_argument('--load', type=str, help='Load zone layout from file')
-    args = parser.parse_args()
-
     window = ZoneEditorOverlay()
-
-    # Load file if specified
-    if args.load and os.path.exists(args.load):
-        try:
-            if window.zone_manager.load_from_file(args.load):
-                window.zones = list(window.zone_manager.zones)
-                window.current_file = args.load
-                window.status_message = f"Loaded {len(window.zones)} zones from {os.path.basename(args.load)}"
-        except Exception as e:
-            print(f"Failed to load file: {e}")
-
     window.show_all()
     Gtk.main()
 
