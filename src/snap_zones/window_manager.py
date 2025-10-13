@@ -450,27 +450,47 @@ class WindowManager:
                       file=sys.stderr)
                 return self._move_resize_via_x11(window_id, x, y, width, height)
 
-            # Call Window Calls MoveResize
-            result = subprocess.run([
+            # Use separate Resize and Move calls instead of MoveResize
+            # MoveResize has issues with some windows (e.g., Steam) where it only resizes but doesn't move
+
+            # First resize
+            resize_result = subprocess.run([
                 'gdbus', 'call', '--session',
                 '--dest', 'org.gnome.Shell',
                 '--object-path', '/org/gnome/Shell/Extensions/Windows',
-                '--method', 'org.gnome.Shell.Extensions.Windows.MoveResize',
-                str(wc_window_id),  # Window Calls window ID
-                str(x),             # X position
-                str(y),             # Y position
-                str(width),         # Width
-                str(height)         # Height
+                '--method', 'org.gnome.Shell.Extensions.Windows.Resize',
+                str(wc_window_id),
+                str(width),
+                str(height)
             ],
             capture_output=True,
             timeout=2.0
             )
 
-            if result.returncode == 0:
+            if resize_result.returncode != 0:
+                print(f"Window Calls Resize failed: {resize_result.stderr.decode('utf-8', errors='replace')}, falling back to X11",
+                      file=sys.stderr)
+                return self._move_resize_via_x11(window_id, x, y, width, height)
+
+            # Then move
+            move_result = subprocess.run([
+                'gdbus', 'call', '--session',
+                '--dest', 'org.gnome.Shell',
+                '--object-path', '/org/gnome/Shell/Extensions/Windows',
+                '--method', 'org.gnome.Shell.Extensions.Windows.Move',
+                str(wc_window_id),
+                str(x),
+                str(y)
+            ],
+            capture_output=True,
+            timeout=2.0
+            )
+
+            if move_result.returncode == 0:
                 return True
             else:
                 # Window Calls failed, fall back to X11
-                print(f"Window Calls failed: {result.stderr.decode('utf-8', errors='replace')}, falling back to X11",
+                print(f"Window Calls Move failed: {move_result.stderr.decode('utf-8', errors='replace')}, falling back to X11",
                       file=sys.stderr)
                 return self._move_resize_via_x11(window_id, x, y, width, height)
 
