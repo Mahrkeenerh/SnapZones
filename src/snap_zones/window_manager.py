@@ -393,6 +393,40 @@ class WindowManager:
                     # If no focused window or multiple focused (shouldn't happen), fall back to X11
                     print(f"  Could not determine focused window - falling back to X11", file=sys.stderr)
                     return None
+                elif len(candidates) == 0:
+                    # PID matching failed (common for Flatpak apps with sandbox PIDs)
+                    # Try matching by WM_CLASS instead
+                    print(f"No windows found with PID {x11_pid} - trying WM_CLASS fallback for Flatpak apps",
+                          file=sys.stderr)
+
+                    # Get WM_CLASS from X11 window
+                    try:
+                        wm_class = self.display.get_atom('WM_CLASS')
+                        wm_class_prop = window.get_full_property(wm_class, X.AnyPropertyType)
+                        if wm_class_prop and wm_class_prop.value:
+                            # WM_CLASS contains instance\0class\0
+                            wm_class_str = wm_class_prop.value.decode('utf-8', errors='replace')
+                            # Split by null byte and get the class name (second element)
+                            wm_class_parts = wm_class_str.split('\0')
+                            if len(wm_class_parts) >= 2:
+                                x11_wm_class = wm_class_parts[1]
+                                print(f"  X11 WM_CLASS: {x11_wm_class}", file=sys.stderr)
+
+                                # Match by WM_CLASS in Window Calls
+                                wm_class_candidates = [w for w in windows if w.get('wm_class', '').lower() == x11_wm_class.lower()]
+
+                                if len(wm_class_candidates) == 1:
+                                    print(f"  Found window by WM_CLASS: id={wm_class_candidates[0]['id']}", file=sys.stderr)
+                                    return wm_class_candidates[0]['id']
+                                elif len(wm_class_candidates) > 1:
+                                    # Multiple windows with same WM_CLASS, use focused one
+                                    print(f"  Multiple windows with WM_CLASS '{x11_wm_class}' - using focused window", file=sys.stderr)
+                                    focused = [w for w in wm_class_candidates if w.get('focus') is True]
+                                    if len(focused) >= 1:
+                                        print(f"  Found focused window: id={focused[0]['id']}", file=sys.stderr)
+                                        return focused[0]['id']
+                    except Exception as e:
+                        print(f"  WM_CLASS fallback failed: {e}", file=sys.stderr)
 
             return None
 
